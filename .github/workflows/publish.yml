@@ -1,0 +1,21 @@
+# Publishes the game: every push to main is copied to the gh-pages branch,
+# which GitHub Pages serves at https://r4flutter.github.io/WhoLies/
+name: Publish site
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish-site
+  cancel-in-progress: true
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Copy main to gh-pages
+        run: git push --force origin HEAD:refs/heads/gh-pages
