@@ -1,0 +1,4 @@
+# ads.txt tells ad buyers which ad networks may sell ads on your site.
+# After AdSense approves you, delete the "#" at the start of the line below
+# and replace pub-0000000000000000 with your own publisher ID (AdSense shows it to you).
+# google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0

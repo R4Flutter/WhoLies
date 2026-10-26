@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# If you move to your own domain, change this address
+Sitemap: https://r4flutter.github.io/WhoLies/sitemap.xml

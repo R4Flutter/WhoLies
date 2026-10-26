@@ -1,0 +1,62 @@
+rules_version = '2';
+
+// WHO'S LYING? leaderboard rules.
+// Paste this into Firebase console > Firestore Database > Rules, then click Publish.
+// They allow reading the leaderboard, and block impossible or duplicate scores.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function okName(n) { return n is string && n.size() >= 2 && n.size() <= 16; }
+    function okBadge(b) { return b in ['', '🥇', '🥈', '🥉', '🎖️', '🏅']; }
+
+    // Daily #1 starts on this date (UTC). Keep it the same as launchDate in js/config.js.
+    function dayStart(d) { return timestamp.date(2026, 10, 26) + duration.value(d - 1, 'd'); }
+    // A day's leaderboard is open from when the first time zone starts it
+    // until every time zone has finished it.
+    function openFor(d) {
+      return request.time > dayStart(d) - duration.value(14, 'h')
+          && request.time < dayStart(d) + duration.value(38, 'h');
+    }
+
+    // One daily result per player per day. Results can't be changed later.
+    match /scores/{id} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'badge', 'day', 'score', 'timeMs', 'grid', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.day is int
+        && request.resource.data.day >= 1 && request.resource.data.day <= 100000
+        && id == string(request.resource.data.day) + '_' + request.auth.uid
+        && okName(request.resource.data.name)
+        && okBadge(request.resource.data.badge)
+        && request.resource.data.score is int
+        && request.resource.data.score >= 0 && request.resource.data.score <= 5
+        && request.resource.data.grid is string
+        && request.resource.data.grid.matches('^[gyr]{5}$')
+        && request.resource.data.grid.replace('r', '').size() == request.resource.data.score
+        && request.resource.data.timeMs is int
+        && request.resource.data.timeMs >= 20000 && request.resource.data.timeMs <= 86400000
+        && request.resource.data.createdAt == request.time
+        && openFor(request.resource.data.day);
+      allow update, delete: if false;
+    }
+
+    // Endless mode: each player keeps their best run. It can only go up.
+    match /endless/{userId} {
+      allow read: if true;
+      allow create, update: if signedIn()
+        && userId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'badge', 'best', 'updatedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && okName(request.resource.data.name)
+        && okBadge(request.resource.data.badge)
+        && request.resource.data.best is int
+        && request.resource.data.best >= 1 && request.resource.data.best <= 2000
+        && request.resource.data.updatedAt == request.time
+        && (resource == null || request.resource.data.best > resource.data.best);
+      allow delete: if false;
+    }
+  }
+}

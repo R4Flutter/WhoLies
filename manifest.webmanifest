@@ -1,0 +1,15 @@
+{
+  "name": "Who's Lying?",
+  "short_name": "Who's Lying",
+  "description": "A daily detective game. Five short cases, one lie in each.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#e7eee5",
+  "theme_color": "#e7eee5",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
