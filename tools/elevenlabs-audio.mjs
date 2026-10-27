@@ -39,7 +39,14 @@ const SOUNDS = [
   { name: "twist", seconds: 2.5, text: "dramatic film noir suspense sting, low piano hit with rising tense strings, short" },
   { name: "fanfare", seconds: 3, text: "short jazzy film noir success jingle, upright bass, vibraphone arpeggio, brushed cymbal, case closed" },
   { name: "fail", seconds: 3, text: "short sad film noir jingle, slow falling vibraphone notes over upright bass" },
-  { name: "whoosh", seconds: 0.6, text: "paper file folder sliding quickly across a desk, soft whoosh" }
+  { name: "whoosh", seconds: 0.6, text: "paper file folder sliding quickly across a desk, soft whoosh" },
+  { name: "coin", seconds: 0.5, text: "single bright gold coin dropped onto a pile of coins, short sparkly clink, game reward" },
+  { name: "star", seconds: 0.6, text: "short magical sparkle chime, one bright bell twinkle, game star earned" },
+  { name: "levelup", seconds: 2, text: "short triumphant jazzy brass level up jingle, rising three notes, mobile game reward" },
+  { name: "combo", seconds: 0.7, text: "quick rising synth whoosh with a bright ping at the end, combo streak sound" },
+  { name: "click", seconds: 0.5, text: "soft clean user interface button click, short, dry" },
+  { name: "buy", seconds: 1, text: "old cash register ka-ching with a small bell, short purchase sound" },
+  { name: "achieve", seconds: 2, text: "short sparkling achievement unlocked chime, ascending bells with a soft cymbal swell" }
 ];
 const MUSIC_PROMPT =
   "Slow, moody film noir detective jazz, instrumental, made to loop as background music for a puzzle game. " +

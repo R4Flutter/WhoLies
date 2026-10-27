@@ -1,12 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="game">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Who's Lying?</title>
-<meta name="description" content="A free daily detective game. Five short cases a day, one lie hidden in each. Read the facts, catch the liar and share your score.">
+<meta name="description" content="A detective game: read the facts, check every story and catch the liar. Career cases, a Daily Case and Rush mode.">
 <meta name="theme-color" content="#e7eee5" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0e1612" media="(prefers-color-scheme: dark)">
+<!-- WEB-ONLY:START -->
 <!-- If you move to your own domain, change the address in the 4 lines below -->
 <link rel="canonical" href="https://r4flutter.github.io/WhoLies/">
 <meta property="og:url" content="https://r4flutter.github.io/WhoLies/">
@@ -14,203 +15,326 @@
 <meta name="twitter:image" content="https://r4flutter.github.io/WhoLies/assets/og-image.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Who's Lying?">
-<meta property="og:title" content="Who's Lying? A daily game of catching liars">
-<meta property="og:description" content="Five short cases a day. Each one hides a lie. Can you catch them all?">
+<meta property="og:title" content="Who's Lying? Catch the liar">
+<meta property="og:description" content="Read the facts, check every story and catch the liar. New cases every day.">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="assets/icon-192.png" sizes="192x192" type="image/png">
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="preload" href="assets/fonts/big-shoulders-display-latin-900-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="assets/fonts/atkinson-hyperlegible-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="css/style.css">
 <!--
   GOOGLE ADSENSE: when you apply for AdSense, Google asks you to paste a code
   like the line below into the <head>. Paste it here, replacing the ID with yours:
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0000000000000000" crossorigin="anonymous"></script>
 -->
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"VideoGame","name":"Who's Lying?","description":"A free daily detective game: five short cases a day, one lie hidden in each.","genre":["Puzzle","Mystery"],"playMode":"SinglePlayer","gamePlatform":"Web browser","applicationCategory":"Game","operatingSystem":"Any","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+{"@context":"https://schema.org","@type":"VideoGame","name":"Who's Lying?","description":"A detective game: read the facts, check every story and catch the liar.","genre":["Puzzle","Mystery"],"playMode":"SinglePlayer","gamePlatform":"Web browser","applicationCategory":"Game","operatingSystem":"Any","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
 </script>
+<!-- WEB-ONLY:END -->
+<!-- PLATFORM-HEAD -->
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preload" href="assets/fonts/big-shoulders-display-latin-900-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/atkinson-hyperlegible-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-<a class="skip" href="#main">Skip to the game</a>
+<body class="booting">
+<div class="app" id="app">
 
-<header class="bar">
-  <div class="bar-in wrap">
-    <button class="brand" id="brand" type="button">Who's Lying<span class="q">?</span></button>
-    <div class="bar-tools">
-      <button class="icon-btn" id="btn-help" type="button" aria-label="How to play">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M9.3 9.2a2.8 2.8 0 1 1 3.9 2.6c-.8.4-1.2 1-1.2 1.9v.6"/><path d="M12 17.2v.3"/></svg>
+  <header class="hud" id="hud">
+    <div class="hud-in">
+      <button class="icon-btn hud-back" id="btn-home" type="button" aria-label="Back to headquarters" hidden>
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
-      <button class="icon-btn" id="btn-board" type="button" aria-label="Leaderboard" hidden>
-        <svg viewBox="0 0 24 24"><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4v1.5A3.5 3.5 0 0 0 7.5 11M17 6h3v1.5a3.5 3.5 0 0 1-3.5 3.5"/><path d="M12 14v4M8.5 20.5h7M10 18h4"/></svg>
-      </button>
-      <button class="icon-btn" id="btn-stats" type="button" aria-label="Your stats">
-        <svg viewBox="0 0 24 24"><path d="M4 20V11M10 20V5M16 20v-6M22 20H2"/></svg>
-      </button>
-      <button class="icon-btn" id="btn-music" type="button" aria-label="Music" aria-pressed="true">
-        <svg viewBox="0 0 24 24"><path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/><path class="mute" d="M3 3l18 18"/></svg>
-      </button>
-      <button class="icon-btn" id="btn-sound" type="button" aria-label="Sound" aria-pressed="true">
-        <svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="wave" d="M15.5 9a4.2 4.2 0 0 1 0 6M18.3 6.5a8 8 0 0 1 0 11"/><path class="mute" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
-      </button>
-    </div>
-  </div>
-</header>
-
-<main id="main" class="wrap">
-
-  <!-- HOME -->
-  <section id="screen-home" class="screen" aria-labelledby="home-title">
-    <div class="hero">
-      <h1 class="hero-title" id="home-title">Who's<br>Lying<span class="q">?</span></h1>
-      <canvas class="trace hero-trace" id="hero-trace" aria-hidden="true"></canvas>
-      <p class="hero-lede">Five short cases a day. Each one hides a lie. Read the facts, then catch the liar.</p>
-    </div>
-
-    <div class="today" id="today">
-      <div class="today-head">
-        <span class="today-num" id="home-num">Daily #1</span>
-        <span class="today-date" id="home-date"></span>
+      <button class="brand" id="brand" type="button">Who's Lying<span class="q">?</span></button>
+      <div class="hud-title" id="hud-title" hidden>
+        <span class="hud-main" id="hud-main"></span>
+        <span class="hud-sub" id="hud-sub"></span>
       </div>
-      <div id="home-state"></div>
-    </div>
-
-    <div class="endless-cta">
-      <button class="btn ghost wide" id="btn-endless" type="button">Endless mode</button>
-      <p class="note" id="endless-note">Unlimited cases against the clock. Three lives.</p>
-    </div>
-
-    <div>
-      <h2 class="how-title">How to play</h2>
-    </div>
-    <ol class="steps">
-      <li><div><strong>Read the facts</strong><span>The police checked these. They are true.</span></div></li>
-      <li><div><strong>Read what each suspect says</strong><span>One story can't be true when you compare it with the facts.</span></div></li>
-      <li><div><strong>Tap the liar</strong><span>One try per case. Watch out for the twist case at the end.</span></div></li>
-    </ol>
-  </section>
-
-  <!-- GAME -->
-  <section id="screen-game" class="screen" aria-label="Case" hidden>
-    <div class="recorder">
-      <canvas class="trace" id="trace" aria-hidden="true"></canvas>
-      <div class="rec-labels"><span id="rec-left">Case 1 of 5</span><span class="rec-time" id="rec-time" role="timer" aria-live="off">0:00</span></div>
-    </div>
-    <div class="game-meta">
-      <div class="pips" id="pips" role="img" aria-label="Your results so far"></div>
-      <div class="score-line" id="score-line" hidden></div>
-      <div class="lives" id="lives" role="img" hidden></div>
-      <span class="replay-tag" id="replay-tag" hidden>Replay: streak safe</span>
-    </div>
-
-    <article class="case" id="case">
-      <p class="case-kicker" id="case-kicker"></p>
-      <h2 class="case-title" id="case-title"></h2>
-      <p class="case-setup" id="case-setup"></p>
-      <div class="twist" id="twist" hidden></div>
-      <h3 class="sec">Facts the police checked</h3>
-      <ul class="clues" id="clues"></ul>
-      <h3 class="sec">What they say</h3>
-      <p class="task" id="task"></p>
-      <p class="tip" id="tip" hidden>Compare each story with the facts above. Exactly one of them can't be true.</p>
-      <div class="suspects" id="suspects"></div>
-      <div class="case-tools">
-        <button class="link-btn" id="btn-hint" type="button">Use a hint</button>
-        <p class="note" id="hint-note"></p>
-      </div>
-    </article>
-  </section>
-
-  <!-- RESULTS -->
-  <section id="screen-results" class="screen" aria-labelledby="res-title" hidden>
-    <p class="res-kicker" id="res-kicker"></p>
-    <h2 class="res-title" id="res-title" tabindex="-1"></h2>
-    <div id="res-body"></div>
-    <div class="share-box">
-      <button class="btn primary wide" id="btn-share" type="button">Share your result</button>
-      <div class="share-alt">
-        <a id="share-wa" href="#" target="_blank" rel="noopener">WhatsApp</a>
-        <a id="share-x" href="#" target="_blank" rel="noopener">Post on X</a>
-        <button id="btn-copy" type="button">Copy text</button>
-      </div>
-      <textarea class="share-text" id="share-text" readonly hidden aria-label="Your result text"></textarea>
-    </div>
-    <div class="rank-card" id="res-rank" hidden></div>
-    <dl class="stat-row" id="res-stats"></dl>
-    <p class="countdown-line" id="res-next"></p>
-    <div class="dlg-row" id="res-actions"></div>
-    <details class="review" id="review">
-      <summary>Review the answers</summary>
-      <div id="review-list"></div>
-    </details>
-    <div class="ad-slot" id="ad-results" hidden></div>
-  </section>
-</main>
-
-<footer class="foot wrap">
-  <a href="archive.html">Past cases</a>
-  <a href="privacy.html">Privacy</a>
-  <span class="spacer"></span>
-  <span>A new set of cases every day at midnight.</span>
-</footer>
-
-<!-- Accuse / verdict panel -->
-<div class="sheet" id="sheet" hidden>
-  <div class="sheet-in">
-    <div id="sheet-accuse" class="dlg-row">
-      <p class="sheet-q" id="accuse-q"></p>
-      <div class="sheet-row">
-        <button class="btn ghost" id="btn-cancel" type="button">Cancel</button>
-        <button class="btn danger" id="btn-accuse" type="button">Accuse</button>
+      <div class="hud-right">
+        <button class="coins" id="coins" type="button" aria-label="Coins. Open the shop">
+          <svg class="coin-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1.2 1.1-2 2.5-2s2.5.8 2.5 1.8c0 2.4-5 1.6-5 4.2 0 1.1 1.1 2 2.5 2s2.5-.8 2.5-2"/></svg>
+          <b id="coin-n">0</b>
+        </button>
+        <button class="icon-btn" id="btn-settings" type="button" aria-label="Settings">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
       </div>
     </div>
-    <div id="sheet-verdict" class="dlg-row" hidden aria-live="polite">
-      <p class="verdict" id="verdict"></p>
-      <p class="why" id="why"></p>
-      <p class="twist-reveal" id="twist-reveal" hidden></p>
-      <button class="btn primary wide" id="btn-next" type="button">Next case</button>
+  </header>
+
+  <main class="stage" id="main">
+
+    <!-- HEADQUARTERS -->
+    <section class="scr hq" id="scr-hq" aria-label="Headquarters" hidden>
+      <div class="hq-grid">
+        <div class="hq-col">
+          <div class="player" id="player">
+            <div class="player-badge" id="player-badge"></div>
+            <div class="player-info">
+              <p class="player-name"><img class="player-avatar" id="player-avatar" alt="" hidden><span id="player-name">Detective</span></p>
+              <p class="player-title" id="player-title">Rookie</p>
+              <div class="xpbar" role="progressbar" id="xpbar" aria-valuemin="0"><span id="xpfill"></span></div>
+              <p class="xp-text" id="xp-text"></p>
+            </div>
+          </div>
+          <div class="career-card" id="career-card">
+            <canvas class="trace card-trace" id="hq-trace" aria-hidden="true"></canvas>
+            <div class="career-in">
+              <p class="eyebrow" id="career-chapter">Chapter 1</p>
+              <h1 class="career-name" id="career-name">Rookie Beat</h1>
+              <div class="nodes" id="career-nodes"></div>
+              <button class="btn primary big wide" id="btn-play" type="button">Play case 1</button>
+              <button class="link-btn" id="btn-map" type="button">Chapter map</button>
+            </div>
+          </div>
+        </div>
+        <div class="hq-col">
+          <div class="modes">
+            <button class="mode-tile" id="tile-daily" type="button">
+              <span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span>
+              <span class="mode-txt"><b>Daily Case</b><span id="daily-sub">5 new cases every day</span></span>
+              <span class="mode-flag" id="daily-flag" hidden>New</span>
+            </button>
+            <button class="mode-tile" id="tile-rush" type="button">
+              <span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg></span>
+              <span class="mode-txt"><b>Rush</b><span id="rush-sub">Catch liars against the clock</span></span>
+            </button>
+          </div>
+          <div class="missions" id="missions">
+            <div class="missions-head"><h2>Today's missions</h2><span class="muted" id="missions-reset"></span></div>
+            <ol class="mission-list" id="mission-list"></ol>
+            <div class="chest" id="chest"></div>
+          </div>
+          <nav class="hq-links" aria-label="More">
+            <button class="chip-btn" id="btn-shop" type="button">Shop</button>
+            <button class="chip-btn" id="btn-ach" type="button">Achievements</button>
+            <button class="chip-btn" id="btn-stats" type="button">Stats</button>
+            <button class="chip-btn" id="btn-board" type="button" hidden>Leaderboard</button>
+            <a class="chip-btn web-only" href="archive.html">Past cases</a>
+          </nav>
+        </div>
+      </div>
+    </section>
+
+    <!-- CASE -->
+    <section class="scr case-scr" id="scr-case" aria-label="Case" hidden>
+      <div class="case-top">
+        <div class="recorder">
+          <canvas class="trace" id="trace" aria-hidden="true"></canvas>
+          <div class="rec-labels"><span id="rec-left">Case 1</span><span class="rec-time" id="rec-time" role="timer" aria-live="off">0:00</span></div>
+        </div>
+        <div class="case-meta" id="case-meta">
+          <div class="pips" id="pips" role="img" hidden></div>
+          <div class="stars-live" id="stars-live" role="img" hidden></div>
+          <div class="lives" id="lives" role="img" hidden></div>
+          <div class="combo" id="combo" hidden></div>
+          <span class="replay-tag" id="replay-tag" hidden>Replay</span>
+        </div>
+      </div>
+      <div class="case-grid" id="case-grid">
+        <article class="pane pane-facts">
+          <p class="case-kicker" id="case-kicker"></p>
+          <h2 class="case-title" id="case-title"></h2>
+          <p class="case-setup" id="case-setup"></p>
+          <div class="twist" id="twist" hidden></div>
+          <h3 class="sec" id="facts-h">Facts the police checked</h3>
+          <ul class="clues" id="clues" aria-labelledby="facts-h"></ul>
+        </article>
+        <section class="pane pane-suspects" aria-labelledby="task">
+          <p class="task" id="task"></p>
+          <div class="suspects" id="suspects"></div>
+        </section>
+        <div class="verdict" id="verdict" hidden aria-live="polite">
+          <div class="verdict-card">
+            <p class="verdict-head" id="verdict-head"></p>
+            <div class="verdict-stars" id="verdict-stars" hidden></div>
+            <p class="verdict-banner" id="verdict-banner" hidden></p>
+            <div class="rewards" id="verdict-rewards"></div>
+            <p class="why" id="why"></p>
+            <p class="twist-reveal" id="twist-reveal" hidden></p>
+            <div class="verdict-actions">
+              <button class="btn primary wide" id="btn-next" type="button">Next case</button>
+              <button class="btn ghost" id="btn-verdict-hq" type="button">HQ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="actionbar" id="actionbar">
+        <div class="tools" id="tools">
+          <button class="tool" id="btn-hint" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
+            <span id="hint-label">Magnifier</span><b class="tool-n" id="hint-n">3</b>
+          </button>
+          <button class="tool" id="btn-freeze" type="button" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M4.2 6.5l15.6 9M4.2 15.5l15.6-9M9 3.5l3 2.5 3-2.5M9 20.5l3-2.5 3 2.5"/></svg>
+            <span>+10s</span><b class="tool-n" id="freeze-n">1</b>
+          </button>
+          <p class="tool-note" id="tool-note"></p>
+        </div>
+        <div class="confirm" id="confirm" hidden>
+          <p class="confirm-q" id="accuse-q"></p>
+          <button class="btn ghost" id="btn-cancel" type="button">Cancel</button>
+          <button class="btn danger" id="btn-accuse" type="button">Accuse</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESULTS (daily + rush) -->
+    <section class="scr results" id="scr-results" aria-labelledby="res-title" hidden>
+      <div class="results-in">
+        <div class="res-main">
+          <p class="eyebrow" id="res-kicker"></p>
+          <h2 class="res-title" id="res-title" tabindex="-1"></h2>
+          <div id="res-body"></div>
+          <div class="rewards big" id="res-rewards"></div>
+          <dl class="stat-row" id="res-stats"></dl>
+          <div class="res-progress" id="res-progress"></div>
+        </div>
+        <div class="res-side">
+          <div class="dlg-row" id="res-actions"></div>
+          <div class="share-box" id="share-box">
+            <button class="btn ghost wide" id="btn-share" type="button">Share your result</button>
+            <!-- WEB-ONLY:START -->
+            <div class="share-alt web-only">
+              <a id="share-wa" href="#" target="_blank" rel="noopener">WhatsApp</a>
+              <a id="share-x" href="#" target="_blank" rel="noopener">Post on X</a>
+              <button id="btn-copy" type="button">Copy text</button>
+            </div>
+            <!-- WEB-ONLY:END -->
+            <textarea class="share-text" id="share-text" readonly hidden aria-label="Your result text"></textarea>
+          </div>
+          <div class="rank-card" id="res-rank" hidden></div>
+          <p class="countdown-line" id="res-next"></p>
+          <details class="review" id="review">
+            <summary>Review the answers</summary>
+            <div id="review-list"></div>
+          </details>
+          <div class="ad-slot" id="ad-results" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHAPTER MAP -->
+    <section class="scr list-scr" id="scr-map" aria-labelledby="map-h" hidden>
+      <div class="list-in">
+        <h2 class="page-h" id="map-h">Case files</h2>
+        <p class="muted">Replay any solved case to earn more stars. Replays give XP but no coins.</p>
+        <div class="chapters" id="chapters"></div>
+      </div>
+    </section>
+
+    <!-- SHOP -->
+    <section class="scr list-scr" id="scr-shop" aria-labelledby="shop-h" hidden>
+      <div class="list-in">
+        <h2 class="page-h" id="shop-h">Shop</h2>
+        <div class="free-coins" id="free-coins" hidden></div>
+        <h3 class="sec">Power-ups</h3>
+        <div class="shop-grid" id="shop-items"></div>
+        <h3 class="sec">Desk themes</h3>
+        <div class="shop-grid" id="shop-themes"></div>
+      </div>
+    </section>
+
+    <!-- ACHIEVEMENTS -->
+    <section class="scr list-scr" id="scr-ach" aria-labelledby="ach-h" hidden>
+      <div class="list-in">
+        <h2 class="page-h" id="ach-h">Achievements</h2>
+        <p class="muted" id="ach-sum"></p>
+        <ul class="ach-list" id="ach-list"></ul>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Tutorial coach -->
+<div class="coach" id="coach" hidden>
+  <div class="coach-ring" id="coach-ring"></div>
+  <div class="coach-bubble" id="coach-bubble" role="dialog" aria-live="polite">
+    <p id="coach-text"></p>
+    <div class="coach-row">
+      <button class="btn primary small" id="coach-next" type="button">Got it</button>
+      <button class="link-btn" id="coach-skip" type="button">Skip tutorial</button>
     </div>
   </div>
 </div>
 
+<dialog id="dlg-settings" aria-labelledby="set-h">
+  <div class="dlg">
+    <button class="icon-btn dlg-close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <h2 id="set-h">Settings</h2>
+    <p class="muted" id="mute-note" hidden>Sound is muted by the site's settings.</p>
+    <label class="switch"><input type="checkbox" id="set-music"><span>Music</span></label>
+    <label class="switch"><input type="checkbox" id="set-sound"><span>Sound effects</span></label>
+    <button class="btn ghost wide" type="button" id="btn-themes">Desk themes</button>
+    <button class="btn ghost wide" type="button" id="btn-help">How to play</button>
+    <div class="danger-zone">
+      <button class="link-btn" type="button" id="btn-reset">Reset all progress</button>
+      <div class="reset-confirm" id="reset-confirm" hidden>
+        <p>This deletes your level, coins, stars and streaks. It can't be undone.</p>
+        <div class="row2">
+          <button class="btn ghost" type="button" id="btn-reset-no">Keep my progress</button>
+          <button class="btn danger" type="button" id="btn-reset-yes">Delete everything</button>
+        </div>
+      </div>
+    </div>
+    <p class="muted small web-only"><a href="privacy.html">Privacy</a></p>
+  </div>
+</dialog>
+
 <dialog id="dlg-help" aria-labelledby="help-h">
   <div class="dlg">
-    <button class="icon-btn dlg-close" type="button" data-close aria-label="Close">
-      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>
+    <button class="icon-btn dlg-close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <h2 id="help-h">How to play</h2>
-    <p>Every day there are five new cases. In each one, the police checked some facts, and three suspects tell you their story.</p>
-    <p><strong>One story can't be true.</strong> Compare each one with the facts and tap the liar. You get one try per case.</p>
-    <h3>The twist case</h3>
-    <p>Case 5 changes the rules. Sometimes two people are lying and you must find the honest one. Sometimes everyone tells the truth and one of the facts is fake.</p>
-    <h3>Your result</h3>
+    <p>The police checked some <strong>facts</strong>. They're true. Then three suspects tell you their story.</p>
+    <p><strong>One story can't be true.</strong> Compare each one with the facts and tap the liar.</p>
+    <h3>Twist cases</h3>
+    <p>Every 5th case changes the rules. Sometimes two people are lying and you must find the honest one. Sometimes everyone is honest and one fact is fake.</p>
+    <h3>Stars</h3>
     <ul class="legend">
-      <li><span class="cell-g"></span>Caught on your own</li>
-      <li><span class="cell-y"></span>Caught with a hint</li>
-      <li><span class="cell-r"></span>The liar got away</li>
+      <li><span class="star-ico on"></span><span class="star-ico on"></span><span class="star-ico on"></span> First try, no hint, under the target time</li>
+      <li><span class="star-ico on"></span><span class="star-ico on"></span><span class="star-ico"></span> First try</li>
+      <li><span class="star-ico on"></span><span class="star-ico"></span><span class="star-ico"></span> Solved after a wrong guess</li>
     </ul>
-    <h3>Endless mode</h3>
-    <p>Unlimited cases with a timer and three lives. Every fifth case is a twist. How long a streak can you build?</p>
+    <h3>Modes</h3>
+    <p><strong>Career:</strong> chapter after chapter of cases. <strong>Daily Case:</strong> 5 cases a day, one try each. <strong>Rush:</strong> catch as many liars as you can before you run out of lives.</p>
+    <p class="muted">Keyboard: keys 1-5 pick, Enter confirms, Esc cancels.</p>
     <button class="btn primary wide" type="button" data-close>Got it</button>
   </div>
 </dialog>
 
 <dialog id="dlg-stats" aria-labelledby="stats-h">
   <div class="dlg">
-    <button class="icon-btn dlg-close" type="button" data-close aria-label="Close">
-      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>
+    <button class="icon-btn dlg-close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <h2 id="stats-h">Your stats</h2>
     <dl class="stat-row" id="stats-row"></dl>
-    <h3>Liars caught per day</h3>
+    <h3>Daily Case: liars caught per day</h3>
     <div class="dist" id="stats-dist"></div>
-    <p id="stats-endless"></p>
-    <h3 id="stats-badges-h" hidden>Your rewards</h3>
+    <dl class="stat-row" id="stats-row2"></dl>
+    <h3 id="stats-badges-h" hidden>Leaderboard badges</h3>
     <p class="badges" id="stats-badges" hidden></p>
+  </div>
+</dialog>
+
+<dialog id="dlg-login" aria-labelledby="login-h">
+  <div class="dlg center">
+    <h2 id="login-h">Daily reward</h2>
+    <p id="login-text">Come back every day for bigger rewards.</p>
+    <ol class="calendar" id="calendar"></ol>
+    <button class="btn primary wide" type="button" id="btn-login-claim">Claim</button>
+    <button class="btn ghost wide" type="button" id="btn-login-double" hidden></button>
+  </div>
+</dialog>
+
+<dialog id="dlg-rank" aria-labelledby="rank-h">
+  <div class="dlg center">
+    <div class="rank-badge" id="rank-badge"></div>
+    <p class="eyebrow" id="rank-eyebrow">Promotion</p>
+    <h2 id="rank-h">Detective</h2>
+    <p id="rank-text"></p>
+    <ul class="reward-list" id="rank-rewards"></ul>
+    <button class="btn primary wide" type="button" data-close>Back to work</button>
   </div>
 </dialog>
 
@@ -218,22 +342,21 @@
   <div class="dlg">
     <h2 id="chance-h">Out of lives</h2>
     <p id="chance-text"></p>
-    <button class="btn danger wide" id="btn-chance-yes" type="button">Keep going</button>
+    <button class="btn primary wide" id="btn-chance-yes" type="button">Keep going</button>
     <button class="btn ghost wide" id="btn-chance-no" type="button">End the run</button>
   </div>
 </dialog>
 
+<!-- WEB-ONLY:START -->
 <dialog id="dlg-board" aria-labelledby="board-h">
   <div class="dlg">
-    <button class="icon-btn dlg-close" type="button" data-close aria-label="Close">
-      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>
+    <button class="icon-btn dlg-close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <h2 id="board-h">Leaderboard</h2>
     <p class="demo-note" id="board-demo" hidden>Demo mode: these players are made up, and nothing you post leaves this device.</p>
     <div class="tabs" role="tablist" aria-label="Which leaderboard">
       <button class="tab" type="button" role="tab" data-tab="today" aria-selected="true">Today</button>
       <button class="tab" type="button" role="tab" data-tab="yesterday" aria-selected="false">Yesterday</button>
-      <button class="tab" type="button" role="tab" data-tab="endless" aria-selected="false">Endless</button>
+      <button class="tab" type="button" role="tab" data-tab="endless" aria-selected="false">Rush</button>
     </div>
     <p class="board-note" id="board-note"></p>
     <ol class="board" id="board-list" aria-live="polite"></ol>
@@ -254,7 +377,7 @@
 </dialog>
 
 <dialog id="dlg-reward" aria-labelledby="reward-h">
-  <div class="dlg reward">
+  <div class="dlg center">
     <p class="reward-badge" id="reward-badge" aria-hidden="true"></p>
     <h2 id="reward-h">You made the top 100!</h2>
     <p id="reward-text"></p>
@@ -262,14 +385,22 @@
     <button class="btn primary wide" type="button" data-close>Nice!</button>
   </div>
 </dialog>
+<!-- WEB-ONLY:END -->
 
-<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="boot" id="boot" aria-hidden="true"><span class="boot-title">Who's Lying<span class="q">?</span></span><span class="boot-bar"><span></span></span></div>
 
-<script src="js/config.js" defer></script>
-<script src="js/cases.js" defer></script>
-<script src="js/engine.js" defer></script>
-<script src="js/ads.js" defer></script>
-<script src="js/leaderboard.js" defer></script>
-<script src="js/game.js" defer></script>
+<script src="js/config.js"></script>
+<script src="js/cases.js"></script>
+<script src="js/engine.js"></script>
+<!-- WEB-ONLY:START -->
+<script src="js/ads.js"></script>
+<script src="js/leaderboard.js"></script>
+<!-- WEB-ONLY:END -->
+<script src="js/platform.js"></script>
+<script src="js/progress.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/game.js"></script>
 </body>
 </html>

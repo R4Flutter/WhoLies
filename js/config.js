@@ -24,6 +24,12 @@ window.WL_CONFIG = {
     sfxVolume: 0.9
   },
 
+  crazygames: {
+    // CrazyGames leaderboards are invite-only. If CrazyGames invites the game, paste the
+    // Encryption Key from the developer portal here; Rush best scores will then be submitted.
+    leaderboardKey: ""
+  },
+
   leaderboard: {
     // Paste your Firebase web app config here to switch on the leaderboard and
     // top-100 rewards (README, step "Switch on the leaderboard"). It looks like:

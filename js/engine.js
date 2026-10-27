@@ -3,7 +3,7 @@
   Shared by the game (index.html) and the past-cases page (archive.html).
   - seeded random numbers (everyone gets the same daily cases)
   - day numbers and dates
-  - the case generator (endless mode + backup when the hand-written list runs out)
+  - the case generator (career levels, rush mode, and backup when the hand-written list runs out)
   - suspect portraits (small SVG sketches)
   - saved progress (localStorage)
 */
@@ -270,22 +270,222 @@
     planted: ["Someone planted that fact to send the police the wrong way.", "The fake fact was meant to frame an innocent person.", "A planted clue is the oldest trick in the book."]
   };
 
-  /* Pick facts from different groups. Facts used recently are avoided when possible. */
-  function pickFacts(count, rng, avoidIds) {
+  /* ---------- more facts ----------
+     tier 1 = easy to spot, 2 = needs a moment, 3 = needs a little math with times or money.
+     groups: two facts that share a group are never used in the same case. */
+  var TIER = { fog: 2, internet: 2, signal: 2, cafe: 2, paint: 2, card: 2, dog: 2, clock: 2, camera: 2 };
+  var EXTRA_GROUPS = { elevator: ["power", "lift"], dog: ["dog", "noise"] };
+  FACTS.forEach(function (f) {
+    f.tier = TIER[f.id] || 1;
+    f.groups = EXTRA_GROUPS[f.id] || [f.group];
+  });
+
+  function clock(min) {
+    var h = Math.floor(min / 60) % 24, m = min % 60;
+    var ap = h >= 12 ? "PM" : "AM", h12 = h % 12 || 12;
+    return h12 + ":" + String(m).padStart(2, "0") + " " + ap;
+  }
+  function dur(min) {
+    var h = Math.floor(min / 60), m = min % 60;
+    return (h ? h + (h === 1 ? " hour" : " hours") : "") + (h && m ? " " : "") + (m ? m + " minutes" : "");
+  }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  FACTS.push(
+    { id: "museum", groups: ["weekday"], tier: 2, clue: "The museum is closed every Tuesday. Yesterday was Tuesday.",
+      truths: ["I wanted to see the dinosaur hall yesterday, but the museum was shut.", "The museum was closed yesterday, so I went to the park instead."],
+      lies: [{ say: "I spent yesterday afternoon in the museum's dinosaur hall.", why: "The museum is closed on Tuesdays, and yesterday was Tuesday." }] },
+    { id: "market", groups: ["weekday"], tier: 2, clue: "The farmers' market only opens on Saturdays. Yesterday was Wednesday.",
+      truths: ["I wanted fresh strawberries, but the farmers' market only opens on Saturdays.", "I'll buy my vegetables at the farmers' market on Saturday."],
+      lies: [{ say: "I bought fresh strawberries at the farmers' market yesterday.", why: "The farmers' market only opens on Saturdays, and yesterday was Wednesday." }] },
+    { id: "ink", groups: ["printer"], tier: 1, clue: "The office printer has been out of ink all week.",
+      truths: ["I had to email my report because the printer had no ink.", "I asked the boss to order more ink for the printer."],
+      lies: [{ say: "I printed fifty color posters on the office printer yesterday.", why: "The office printer has been out of ink all week, so it printed nothing." }] },
+    { id: "rink", groups: ["rink"], tier: 1, clue: "The ice rink has been closed all week because the ice machine broke.",
+      truths: ["I wanted to go skating, but the ice rink was closed.", "My skating lesson was cancelled this week."],
+      lies: [{ say: "I went skating at the ice rink for two hours yesterday.", why: "The ice rink has been closed all week." }] },
+    { id: "lion", groups: ["zoo"], tier: 1, clue: "The zoo's only lion has been at the animal hospital all week.",
+      truths: ["The lion's cage at the zoo was empty when I visited.", "My kids were sad. The lion is away at the animal hospital."],
+      lies: [{ say: "I watched the zoo's lion eat his dinner yesterday.", why: "The zoo's only lion has been at the animal hospital all week." }] },
+    { id: "fireworks", groups: ["noise"], tier: 2, clue: "Loud fireworks went off over the river from 10 PM to 10:30 PM. The whole town heard them.",
+      truths: ["The fireworks at ten woke my baby up.", "I heard the fireworks bang over the river at about ten."],
+      lies: [{ say: "Last night was totally silent. I didn't hear a single sound from nine until midnight.", why: "Loud fireworks went off from 10 to 10:30 PM, and the whole town heard them." }] },
+    { id: "drilling", groups: ["noise"], tier: 2, clue: "Builders were drilling next to the office from 8 AM to 5 PM yesterday.",
+      truths: ["I couldn't hear my phone ring over the drilling all day.", "The drilling next door gave me a headache by lunchtime."],
+      lies: [{ say: "At 3 PM yesterday the office was so quiet you could hear a pin drop.", why: "Builders were drilling next to the office until 5 PM, so it wasn't quiet at 3 PM." }] },
+    { id: "school", groups: ["school"], tier: 1, clue: "All schools in town were closed yesterday for a teachers' meeting.",
+      truths: ["My kids were home all day because the schools were closed.", "No school yesterday, so my kids spent the day at their grandma's house."],
+      lies: [{ say: "I dropped my kids off at school yesterday morning, like always.", why: "All schools in town were closed yesterday." }] },
+    { id: "network", groups: ["signal"], tier: 2, clue: "The mobile phone network was down across the whole city from 8 PM to 10 PM.",
+      truths: ["My phone had no signal at all between eight and ten.", "I couldn't call a taxi at nine. The phone network was down."],
+      lies: [{ say: "I called my sister on my mobile at nine, and we talked for an hour.", why: "The mobile network was down across the city from 8 to 10 PM." }] },
+    { id: "petrol", groups: ["fuel"], tier: 1, clue: "Every petrol station in town ran out of fuel by noon yesterday.",
+      truths: ["I couldn't find petrol anywhere, so I left my car at home.", "I drove to three petrol stations. All of them were empty."],
+      lies: [{ say: "I filled up my car at the petrol station on Main Street at 4 PM yesterday.", why: "Every petrol station in town ran out of fuel by noon." }] },
+    { id: "atm", groups: ["card"], tier: 1, clue: "Every cash machine in town was out of order yesterday.",
+      truths: ["I couldn't get any cash yesterday, so I paid by card.", "I tried two cash machines. Both screens said 'out of order'."],
+      lies: [{ say: "I took out cash from the machine outside the bank yesterday afternoon.", why: "Every cash machine in town was out of order yesterday." }] },
+    { id: "tide", groups: ["tide"], tier: 2, clue: "At high tide, from 8 PM to midnight, the beach path is under water.",
+      truths: ["I took the long road home because the beach path was flooded.", "I waited at the café until the tide went out."],
+      lies: [{ say: "I walked home along the beach path at nine, and my feet stayed dry.", why: "The beach path is under water at high tide, from 8 PM to midnight." }] },
+    { id: "gymshower", groups: ["gym"], tier: 1, clue: "The gym's showers have been broken for a week.",
+      truths: ["I went home sweaty, because the gym showers are broken.", "I showered at home after the gym."],
+      lies: [{ say: "I had a long hot shower at the gym after my workout yesterday.", why: "The gym's showers have been broken for a week." }] },
+    { id: "concert", groups: ["concert"], tier: 1, clue: "The Starlight concert was sold out. Nobody got in without a ticket.",
+      truths: ["I couldn't get a ticket, so I listened from outside.", "I showed my ticket at the door of the Starlight concert."],
+      lies: [{ say: "I walked into the Starlight concert without a ticket. Nobody stopped me.", why: "Nobody got into the Starlight concert without a ticket." }] },
+    { id: "storeroom", groups: ["keys"], tier: 2, clue: "There is one key to the storeroom. The manager kept it in her pocket all day.",
+      truths: ["I needed boxes from the storeroom, so I asked the manager to open it.", "I waited by the storeroom until the manager came with her key."],
+      lies: [{ say: "I opened the storeroom with my own key yesterday.", why: "There is only one key to the storeroom, and the manager kept it all day." }] },
+    { id: "hallway", groups: ["lights"], tier: 1, clue: "The hallway lights have been broken for three days.",
+      truths: ["I find my front door with my phone torch at night.", "I nearly tripped over a box in the dark hallway."],
+      lies: [{ say: "Last night I read the notices on the hallway board under the bright lights.", why: "The hallway lights have been broken for three days." }] },
+    { id: "flights", groups: ["airport"], tier: 1, clue: "Every flight was cancelled yesterday because of a strike.",
+      truths: ["My flight was cancelled, so I slept at the airport.", "I'm still waiting to fly home after the strike."],
+      lies: [{ say: "I flew home from Paris yesterday and landed at six.", why: "Every flight was cancelled yesterday because of a strike." }] },
+    { id: "parade", groups: ["road"], tier: 1, clue: "Main Street was closed to cars all day for a parade.",
+      truths: ["The parade blocked Main Street, so I took the back roads.", "I parked outside the center and watched the parade."],
+      lies: [{ say: "I drove down Main Street at noon. There was hardly any traffic.", why: "Main Street was closed to cars all day for a parade." }] },
+    { id: "snacks", groups: ["vending"], tier: 1, clue: "The snack machine in the lobby has been empty all week.",
+      truths: ["I wanted crisps from the snack machine, but it was empty.", "I brought my own snacks because the machine is empty."],
+      lies: [{ say: "I bought two chocolate bars from the lobby snack machine yesterday.", why: "The snack machine in the lobby has been empty all week." }] },
+    { id: "parkgates", groups: ["park"], tier: 1, clue: "The park gates are locked every night at 8 PM.",
+      truths: ["I got to the park at nine, and the gates were locked.", "I jog in the park early, before the gates close at eight."],
+      lies: [{ say: "I jogged around the park at ten last night.", why: "The park gates are locked every night at 8 PM." }] },
+    { id: "cameraoff", groups: ["camera"], tier: 1, clue: "The shop's security camera was switched off for repairs all night.",
+      truths: ["The repair man was still fixing the camera when I left.", "There's no camera footage from last night. It was off."],
+      lies: [{ say: "I watched last night's footage from the shop camera. You can see the thief clearly.", why: "The shop's camera was switched off for repairs all night." }] },
+
+    /* --- number puzzles: new times and prices every case --- */
+    { id: "closing", groups: ["closing"], tier: 2, make: function (r) {
+      var pl = pick([["pharmacy", "a box of plasters"], ["bookshop", "a new novel"], ["post office", "some stamps"],
+        ["hardware store", "a hammer"], ["toy shop", "a puzzle"], ["flower shop", "a bunch of tulips"]], r);
+      var H = pick([17, 18, 19, 20], r) * 60, late = H + pick([30, 45, 60, 75], r);
+      return { clue: "The " + pl[0] + " closed at " + clock(H) + " yesterday.",
+        truths: ["I got to the " + pl[0] + " at " + clock(H + pick([10, 15, 20], r)) + ", but it was already closed.",
+          "I bought " + pl[1] + " at the " + pl[0] + " at " + clock(H - pick([20, 30, 40], r)) + ", before it closed."],
+        lies: [{ say: "I was in the " + pl[0] + " at " + clock(late) + ", buying " + pl[1] + ".",
+          why: "The " + pl[0] + " closed at " + clock(H) + ", so nobody was shopping there at " + clock(late) + "." }] };
+    } },
+    { id: "lastbus", groups: ["bus"], tier: 2, make: function (r) {
+      var area = pick(["the city center", "the harbor", "the stadium", "the airport", "Old Town"], r);
+      var T = pick([22 * 60, 22 * 60 + 30, 23 * 60, 23 * 60 + 15], r), late = T + pick([30, 40], r);
+      return { clue: "The last bus from " + area + " leaves at " + clock(T) + ". There are no buses after it.",
+        truths: ["I ran for the " + clock(T) + " bus from " + area + " and just made it.", "I missed the last bus from " + area + ", so I walked home."],
+        lies: [{ say: "I took the " + clock(late) + " bus home from " + area + ".",
+          why: "The last bus from " + area + " leaves at " + clock(T) + ". There is no " + clock(late) + " bus." }] };
+    } },
+    { id: "filmlength", groups: ["cinema"], tier: 3, make: function (r) {
+      var title = pick(["Night Harbor", "The Glass Key", "Red Signal", "Moonlight Avenue", "The Last Witness", "Silent Alley"], r);
+      var S = pick([18 * 60, 18 * 60 + 30, 19 * 60, 19 * 60 + 15, 20 * 60], r), L = pick([90, 105, 120, 135, 150], r), E = S + L;
+      var early = E - pick([30, 40, 45], r), q = "“" + title + "”";
+      return { clue: "The film " + q + " started at " + clock(S) + " and lasts " + dur(L) + ".",
+        truths: ["I watched " + q + " to the very end and came out at " + clock(E) + ".",
+          "I left " + q + " early, at " + clock(S + Math.round(L / 10) * 5) + ". It was boring."],
+        lies: [{ say: "I watched all of " + q + " and walked out right as it ended, at " + clock(early) + ".",
+          why: q + " started at " + clock(S) + " and lasts " + dur(L) + ", so it ended at " + clock(E) + ", not " + clock(early) + "." }] };
+    } },
+    { id: "walk", groups: ["distance"], tier: 3, make: function (r) {
+      var pair = pick([["the station", "the museum"], ["the harbor", "the market"], ["the school", "the stadium"],
+        ["the hotel", "the town hall"], ["the bakery", "the hospital"], ["the library", "the zoo"]], r);
+      var d = pick([20, 25, 30, 40], r), t = pick([19 * 60, 19 * 60 + 10, 20 * 60 + 5, 20 * 60 + 30, 21 * 60], r);
+      var fast = d >= 30 ? 10 : 5;
+      return { clue: cap(pair[0]) + " is a " + d + "-minute walk from " + pair[1] + ".",
+        truths: ["I left " + pair[0] + " at " + clock(t) + " and walked to " + pair[1] + ". I got there at " + clock(t + d + 5) + ".",
+          "Walking from " + pair[0] + " to " + pair[1] + " took me about " + (d + 5) + " minutes."],
+        lies: [{ say: "I left " + pair[0] + " at " + clock(t) + " and walked to " + pair[1] + ". I got there at " + clock(t + fast) + ".",
+          why: cap(pair[0]) + " is a " + d + "-minute walk from " + pair[1] + ", so nobody walks it in " + fast + " minutes." }] };
+    } },
+    { id: "frozen", groups: ["sky"], tier: 2, make: function (r) {
+      var c = "−" + pick([6, 8, 10, 12], r) + "°C";
+      return { clue: "It was " + c + " last night, and the lake froze solid.",
+        truths: ["I scraped ice off my car windows for ten minutes this morning.", "The lake was frozen, so kids were sliding on it this morning."],
+        lies: [{ say: "I went for a midnight swim in the lake. The water felt lovely.", why: "It was " + c + " and the lake froze solid, so nobody swam in it." },
+          { say: "It was such a warm night that I slept with every window open.", why: "It was " + c + " last night. That isn't a warm night." }] };
+    } },
+    { id: "tickets", groups: ["tickets"], tier: 3, make: function (r) {
+      var ev = pick(["the jazz night", "the magic show", "the comedy club", "the puppet theater", "the science fair"], r);
+      var p = pick([8, 12, 15, 18, 25], r), k = pick([3, 5, 6], r);
+      return { clue: "Tickets for " + ev + " cost $" + p + " each. There were no discounts.",
+        truths: ["I paid $" + (2 * p) + " for two tickets to " + ev + ", for me and my sister.", "I bought one ticket to " + ev + " for $" + p + "."],
+        lies: [{ say: "I bought three tickets to " + ev + " for my friends and me. It cost $" + (3 * p - k) + " in total.",
+          why: "Tickets cost $" + p + " each with no discounts, so three cost $" + (3 * p) + ", not $" + (3 * p - k) + "." }] };
+    } },
+    { id: "rainhours", groups: ["sky"], tier: 2, make: function (r) {
+      var a = pick([17, 18, 19], r) * 60, b = a + pick([180, 240], r), mid = a + pick([60, 90, 120], r);
+      return { clue: "It rained hard from " + clock(a) + " until " + clock(b) + " yesterday.",
+        truths: ["I waited for the rain to stop at " + clock(b) + " before I walked my dog.", "I got soaked running to my car at " + clock(mid) + "."],
+        lies: [{ say: "I walked my dog at " + clock(mid) + ". It was a lovely dry evening.",
+          why: "It rained hard from " + clock(a) + " until " + clock(b) + ", so it wasn't dry at " + clock(mid) + "." }] };
+    } }
+  );
+
+  PREMISES.push(
+    { title: "The Pearl Necklace", setup: "A pearl necklace vanished from a hotel safe." },
+    { title: "The Red Scooter", setup: "A red scooter was taken from outside the library." },
+    { title: "The Ruined Roses", setup: "Someone ruined the prize roses at the flower show." },
+    { title: "The Missing Puppy", setup: "A puppy went missing from a pet shop. (He was found safe and happy.)" },
+    { title: "The Leaked Exam", setup: "The answers to tomorrow's exam were taken from the teacher's desk." },
+    { title: "The Swapped Suitcase", setup: "A suitcase full of cash was swapped at the train station." },
+    { title: "The Golden Spoon", setup: "A golden spoon disappeared from a fancy restaurant." },
+    { title: "The Lost Manuscript", setup: "A famous writer's new book went missing from her desk." },
+    { title: "The Bronze Statue", setup: "A small bronze statue vanished from the park." },
+    { title: "The Pink Spots", setup: "Someone painted pink spots all over a shiny sports car." },
+    { title: "The Glued Locks", setup: "Someone glued shut every lock in the office building." },
+    { title: "The Missing Medal", setup: "A gold medal disappeared from its glass case at the sports club." },
+    { title: "The False Alarm", setup: "Someone pulled the fire alarm at the theater in the middle of the show." },
+    { title: "The Popped Balloons", setup: "Every balloon for the big party was popped overnight." },
+    { title: "The Stolen Lunch", setup: "Someone ate the boss's lunch from the office fridge." },
+    { title: "The Paper Crown", setup: "The crown for the school play vanished before opening night." },
+    { title: "The Deleted Photos", setup: "All the wedding photos were deleted from the photographer's camera." },
+    { title: "The Treasure Map", setup: "An old treasure map vanished from the town museum." },
+    { title: "The Empty Till", setup: "The cash till at the corner shop was found empty." },
+    { title: "The Cut Cables", setup: "Someone cut the cables of the big screen in the town square." },
+    { title: "The Ring Box", setup: "A ring box vanished one hour before a wedding." },
+    { title: "The Contest Robot", setup: "A school team's robot disappeared the night before the big contest." },
+    { title: "The Talking Parrot", setup: "Someone opened the cage of a talking parrot, and it flew away." },
+    { title: "The Copied Project", setup: "Someone copied the top student's science project." },
+    { title: "The Spilled Paint", setup: "Someone spilled paint over the brand-new gym floor." },
+    { title: "The Record Fish", setup: "A record-breaking fish vanished from the fishing club's freezer." }
+  );
+  NAMES.push("Bruno", "Chiara", "Dmitri", "Esra", "Farid", "Grace", "Hugo", "Iris", "Joon", "Kalinda", "Luca", "Mira",
+    "Nikhil", "Olga", "Pablo", "Quinn", "Rosa", "Sota", "Tess", "Umar", "Vikram", "Wen", "Xavier", "Yara", "Zoltan",
+    "Abena", "Bao", "Carmen", "Dario", "Eitan", "Fiona", "Gopal", "Hannah", "Ines", "Jamal", "Kofi", "Lena", "Musa", "Nia", "Otto");
+  ROLES.push("Barista", "Security guard", "Postman", "Lawyer", "Chef", "Bus driver", "Hairdresser", "Banker", "Vet", "Firefighter",
+    "Journalist", "Pilot", "Tailor", "Jeweler", "Coach", "Painter", "Farmer", "Scientist", "Singer", "Lifeguard");
+
+  /* Pick facts that never share a group. Facts used recently are avoided when possible.
+     maxTier limits difficulty; needTier puts one fact of at least that tier in the case. */
+  function instantiate(f, rng) {
+    if (!f.make) return f;
+    var m = f.make(rng);
+    return { id: f.id, groups: f.groups, tier: f.tier, clue: m.clue, truths: m.truths, lies: m.lies };
+  }
+  function pickFacts(count, rng, avoidIds, maxTier, needTier) {
     var avoid = avoidIds || {};
-    var pool = shuffle(FACTS, rng);
+    var pool = shuffle(FACTS.filter(function (f) { return f.tier <= (maxTier || 3); }), rng);
     var fresh = pool.filter(function (f) { return !avoid[f.id]; });
     var stale = pool.filter(function (f) { return avoid[f.id]; });
     var ordered = fresh.concat(stale), used = {}, out = [];
-    for (var i = 0; i < ordered.length && out.length < count; i++) {
-      if (!used[ordered[i].group]) { used[ordered[i].group] = 1; out.push(ordered[i]); }
+    if (needTier) {
+      for (var j = 0; j < ordered.length; j++) {
+        if (ordered[j].tier >= needTier) { ordered.unshift(ordered.splice(j, 1)[0]); break; }
+      }
     }
-    return out;
+    for (var i = 0; i < ordered.length && out.length < count; i++) {
+      var gs = ordered[i].groups;
+      if (gs.some(function (g) { return used[g]; })) continue;
+      gs.forEach(function (g) { used[g] = 1; });
+      out.push(ordered[i]);
+    }
+    return out.map(function (f) { return instantiate(f, rng); });
   }
 
   /*
     opts.mode: "liar" | "honest" | "planted"
-    opts.clueCount: 3 or 4 (extra clues are harmless distractions)
+    opts.clueCount: 3 to 5 (facts beyond 3 are harmless distractions)
+    opts.maxTier / opts.needTier: difficulty (see pickFacts)
+    opts.premise: force a story opener
     opts.avoid: { names: {}, premises: {}, facts: {} } — keeps a day or a run varied
   */
   function generateCase(rng, opts) {
@@ -294,19 +494,28 @@
     var avoid = opts.avoid || { names: {}, premises: {}, facts: {} };
     var clueCount = Math.max(3, opts.clueCount || 3);
 
-    var premises = PREMISES.filter(function (p) { return !avoid.premises[p.title]; });
-    var premise = pick(premises.length ? premises : PREMISES, rng);
+    var premise = opts.premise;
+    if (!premise) {
+      var premises = PREMISES.filter(function (p) { return !avoid.premises[p.title]; });
+      premise = pick(premises.length ? premises : PREMISES, rng);
+    }
     avoid.premises[premise.title] = 1;
 
-    var facts = pickFacts(clueCount, rng, avoid.facts);
+    var facts = pickFacts(clueCount, rng, avoid.facts, opts.maxTier, opts.needTier);
     facts.forEach(function (f) { avoid.facts[f.id] = 1; });
+
+    var target = Math.floor(rng() * 3);
+    if (opts.needTier) {
+      // the hard fact (first in the list) is the one that catches the liar
+      var slot = mode === "honest" ? (target + 1 + Math.floor(rng() * 2)) % 3 : target;
+      var t0 = facts[0]; facts[0] = facts[slot]; facts[slot] = t0;
+    }
     var spoken = facts.slice(0, 3); // suspect i talks about spoken[i]
 
     var names = shuffle(NAMES.filter(function (n) { return !avoid.names[n]; }), rng).slice(0, 3);
     var roles = shuffle(ROLES, rng).slice(0, 3);
     names.forEach(function (n) { avoid.names[n] = 1; });
 
-    var target = Math.floor(rng() * 3);
     var suspects = [], whyParts = [];
     for (var i = 0; i < 3; i++) {
       var f = spoken[i], lie = pick(f.lies, rng);
@@ -324,7 +533,7 @@
     var answer, why;
     if (mode === "planted") {
       answer = clueOrder.indexOf(target);
-      why = "Everyone told the truth, so the fact \u201c" + facts[target].clue + "\u201d must be fake. " + names[target] + "'s story proves it.";
+      why = "Everyone told the truth, so the fact “" + facts[target].clue + "” must be fake. " + names[target] + "'s story proves it.";
     } else if (mode === "honest") {
       answer = target;
       why = names[target] + " told the truth. " + whyParts.map(function (w) { return w.name + " lied: " + w.why; }).join(" ");
@@ -382,24 +591,92 @@
     });
     var twistMode = day % 2 ? "honest" : "planted";
     var list = [
-      generateCase(seed(1), { mode: "liar", clueCount: 3, level: "easy", avoid: avoid }),
-      hand[2] || generateCase(seed(2), { mode: "liar", clueCount: 3, level: "medium", avoid: avoid }),
-      generateCase(seed(3), { mode: "liar", clueCount: 4, level: "medium", avoid: avoid }),
-      hand[4] || generateCase(seed(4), { mode: "liar", clueCount: 4, level: "hard", avoid: avoid }),
-      hand[5] || generateCase(seed(5), { mode: twistMode, clueCount: 3, level: "twist", avoid: avoid })
+      generateCase(seed(1), { mode: "liar", clueCount: 3, level: "easy", maxTier: 1, avoid: avoid }),
+      hand[2] || generateCase(seed(2), { mode: "liar", clueCount: 3, level: "medium", maxTier: 2, avoid: avoid }),
+      generateCase(seed(3), { mode: "liar", clueCount: 4, level: "medium", maxTier: 2, avoid: avoid }),
+      hand[4] || generateCase(seed(4), { mode: "liar", clueCount: 4, level: "hard", maxTier: 3, needTier: 3, avoid: avoid }),
+      hand[5] || generateCase(seed(5), { mode: twistMode, clueCount: 3, level: "twist", maxTier: 2, avoid: avoid })
     ];
     dayCache[day] = list;
     return list;
   }
 
-  /* Endless mode: case n (1, 2, 3...). Every 5th case is a twist. */
+  /* ---------- career: endless chapters of 10 cases ---------- */
+  var CHAPTERS = ["Rookie Beat", "Downtown", "The Harbor", "High Society", "Night Shift",
+    "The Old Quarter", "Riverside", "The Syndicate", "Cold Cases", "Final Verdict"];
+  function roman(n) {
+    var v = [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]], out = "";
+    v.forEach(function (p) { while (n >= p[0]) { out += p[1]; n -= p[0]; } });
+    return out;
+  }
+  function chapterOf(n) { return Math.ceil(n / 10); }
+  function chapterName(ch) {
+    var round = Math.floor((ch - 1) / CHAPTERS.length);
+    return CHAPTERS[(ch - 1) % CHAPTERS.length] + (round ? " " + roman(round + 1) : "");
+  }
+  function careerSpec(n) {
+    var ch = chapterOf(n), k = (n - 1) % 10 + 1, twist = k === 5 || k === 10;
+    var s = { n: n, chapter: ch, slot: k, mode: "liar", clueCount: 3, maxTier: 1, needTier: 0, level: "easy" };
+    if (twist) s.mode = (k === 5) === (ch % 2 === 1) ? "honest" : "planted";
+    if (ch === 1) {
+      s.maxTier = k >= 7 ? 2 : 1;
+      s.clueCount = twist || k < 6 ? 3 : 4;
+      s.level = twist ? "twist" : k <= 4 ? "easy" : "medium";
+    } else if (ch === 2) {
+      s.maxTier = 2;
+      s.clueCount = twist || k < 4 ? 3 : 4;
+      s.level = twist ? "twist" : k >= 6 ? "hard" : "medium";
+    } else {
+      s.maxTier = 3;
+      s.clueCount = twist ? 4 : k <= 3 ? 4 : 5;
+      s.needTier = !twist && (k === 4 || k === 7 || k === 9) ? 3 : 0;
+      s.level = twist ? "twist" : k >= 6 ? "hard" : "medium";
+    }
+    // seconds to beat for the third star
+    s.par = 18 + s.clueCount * 7 + (twist ? 15 : 0) + (s.needTier ? 15 : 0);
+    return s;
+  }
+  var TUTORIAL = {
+    title: "The Missing Cupcakes",
+    setup: "A box of cupcakes vanished from the school kitchen.",
+    clues: ["It rained hard all afternoon.", "The kitchen door was locked at 3 PM.", "The cupcakes were last seen at 2 PM."],
+    suspects: [
+      { name: "Mia", role: "Student", says: "I played football outside all afternoon. The sun was shining!" },
+      { name: "Leo", role: "Teacher", says: "I was marking tests in my classroom until four." },
+      { name: "Rosa", role: "Cook", says: "I locked the kitchen at three and went home with my umbrella." }
+    ],
+    answer: 0,
+    why: "It rained hard all afternoon, so there was no sunshine for Mia to play football in."
+  };
+  var careerCache = {};
+  function buildCareerLevel(n) {
+    if (careerCache[n]) return careerCache[n];
+    var s = careerSpec(n), c;
+    if (n === 1) {
+      c = prepHand(TUTORIAL, "easy", rngFrom("wl-career-1"));
+    } else {
+      // walk through all story openers in a shuffled order, so they don't repeat for 50 cases
+      var round = Math.floor((n - 2) / PREMISES.length);
+      var premise = shuffle(PREMISES, rngFrom("wl-prem-" + round))[(n - 2) % PREMISES.length];
+      c = generateCase(rngFrom("wl-career-" + n), {
+        mode: s.mode, clueCount: s.clueCount, maxTier: s.maxTier, needTier: s.needTier, level: s.level, premise: premise,
+        avoid: { names: {}, premises: {}, facts: {} }
+      });
+    }
+    c.spec = s;
+    careerCache[n] = c;
+    return c;
+  }
+
+  /* Rush (endless) mode: case n (1, 2, 3...). Every 5th case is a twist. */
   function endlessSpec(n) {
-    if (n % 5 === 0) return { mode: (n / 5) % 2 ? "honest" : "planted", clueCount: 3, level: "twist" };
-    return { mode: "liar", clueCount: n <= 3 ? 3 : 4, level: n <= 3 ? "easy" : "medium" };
+    var maxTier = n <= 5 ? 1 : n <= 15 ? 2 : 3;
+    if (n % 5 === 0) return { mode: (n / 5) % 2 ? "honest" : "planted", clueCount: 3, level: "twist", maxTier: Math.min(2, maxTier) };
+    return { mode: "liar", clueCount: n <= 3 ? 3 : 4, level: n <= 3 ? "easy" : n <= 15 ? "medium" : "hard", maxTier: maxTier };
   }
   function endlessSeconds(n) {
-    var base = Math.max(25, 50 - Math.floor((n - 1) / 5) * 4);
-    return endlessSpec(n).mode === "liar" ? base : base + 10;
+    var spec = endlessSpec(n), base = Math.max(22, 48 - Math.floor((n - 1) / 5) * 4);
+    return base + (spec.mode === "liar" ? 0 : 10) + (spec.maxTier === 3 ? 6 : 0);
   }
 
   /* ---------- suspect portraits ----------
@@ -486,6 +763,7 @@
     cfg: CFG, rngFrom: rngFrom, shuffle: shuffle, pick: pick,
     dayNumber: dayNumber, dateForDay: dateForDay, formatDate: formatDate, msToNextDay: msToNextDay,
     buildDay: buildDay, generateCase: generateCase, endlessSpec: endlessSpec, endlessSeconds: endlessSeconds,
+    careerSpec: careerSpec, buildCareerLevel: buildCareerLevel, chapterOf: chapterOf, chapterName: chapterName, clock: clock,
     avatar: avatar, load: load, save: save, esc: esc, fmtTime: fmtTime, fmtCountdown: fmtCountdown,
     track: track, siteUrl: siteUrl, FACTS: FACTS, PREMISES: PREMISES, CASES: CASES
   };

@@ -54,12 +54,35 @@ for (let n = 1; n <= 600; n++) {
   const c = WL.generateCase(WL.rngFrom("t" + n), { ...spec, avoid: { names: {}, premises: {}, facts: {} } });
   checkCase(c, `endless ${n}`, true);
 }
+// Career: 500 levels. Rush: 300 cases with growing difficulty.
+const repeats = [];
+for (let n = 1; n <= 500; n++) {
+  const c = WL.buildCareerLevel(n);
+  checkCase(c, `career ${n}`, n > 1);
+  if (n > 1 && WL.buildCareerLevel(n - 1).title === c.title) repeats.push(n);
+  const spec = WL.careerSpec(n);
+  if (spec.mode !== c.mode) fail(`career ${n}`, "mode doesn't match its spec");
+}
+if (repeats.length) fail("career", `same story opener twice in a row at levels ${repeats.slice(0, 5).join(", ")}`);
+for (let n = 1; n <= 300; n++) {
+  const spec = WL.endlessSpec(n);
+  const c = WL.generateCase(WL.rngFrom("rush" + n), { ...spec, avoid: { names: {}, premises: {}, facts: {} } });
+  checkCase(c, `rush ${n}`, true);
+}
+// Parametric facts: times must stay inside one day and prices must make sense.
+for (let n = 1; n <= 2000; n++) {
+  const c = WL.generateCase(WL.rngFrom("p" + n), { mode: "liar", clueCount: 5, maxTier: 3, needTier: 3, avoid: { names: {}, premises: {}, facts: {} } });
+  const text = JSON.stringify(c);
+  if (/NaN|undefined|\$-|\$0\b/.test(text)) fail(`number puzzle ${n}`, "bad number in: " + text.slice(0, 160));
+}
+const careerA = JSON.stringify(WL.buildCareerLevel(77));
 // Same day must build the same cases every time (everyone plays the same puzzle).
 const a = JSON.stringify(WL.buildDay(7)), b = JSON.stringify(WL.generateCase && WL.buildDay(7));
 if (a !== b) fail("determinism", "day 7 changed between builds");
 
 console.log(`\nHand-written: ${C.medium.length} medium, ${C.hard.length} hard, ${C.twist.length} twist`);
 console.log(`Hand-written dailies last ${Math.min(C.medium.length, C.hard.length, C.twist.length)} days; after that the generator takes over.`);
-console.log(`Generator: ${WL.FACTS.length} facts, ${WL.PREMISES.length} story openers, ${seen.size} different opening cases in 400 days.`);
+console.log(`Generator: ${WL.FACTS.length} facts (${WL.FACTS.filter(f => f.make).length} with random times/prices), ${WL.PREMISES.length} story openers, ${seen.size} different opening cases in 400 days.`);
+console.log(`Career: checked 500 levels (${Math.ceil(500 / 10)} chapters). Rush: checked 300 cases.`);
 console.log(problems ? `\n${problems} problem(s) found.` : "\nAll good. No problems found.");
 process.exit(problems ? 1 : 0);

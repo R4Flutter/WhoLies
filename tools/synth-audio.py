@@ -197,6 +197,60 @@ def sfx():
     save("whoosh", fade(x * env, 0.005, 0.02), peak_db=-9, bitrate="96k")
 
 
+# ---------- game-feel effects (rewards, menus) ----------
+def sfx_rewards():
+    # coin: two bright bell pings
+    st = np.zeros((2, int(SR * 0.6)))
+    for i, m in enumerate((88, 95)):
+        t = T(0.5); f = mtof(m)
+        x = (np.sin(2 * np.pi * f * t) + 0.35 * np.sin(2 * np.pi * 2.76 * f * t)) * np.exp(-t / 0.12)
+        place(st, fade(x, 0.001, 0.05), 0.06 * i, 0.6, pan=-0.2 + 0.4 * i)
+    save("coin", reverb(st, 0.12, dur=0.6, tau=0.15), peak_db=-5, bitrate="96k")
+
+    # star: one sparkling vibraphone ping (the game raises its pitch for stars 2 and 3)
+    st = np.zeros((2, int(SR * 1.2)))
+    place(st, vibe(84, 1.0), 0.0, 0.8)
+    t = T(0.4)
+    sparkle = hp(noise(len(t)), 7000) * np.exp(-t / 0.05) * 0.25
+    place(st, sparkle, 0.0, 0.5, pan=0.3)
+    save("star", reverb(st, 0.25), peak_db=-4, bitrate="96k")
+
+    # levelup: rising arpeggio with a soft cymbal
+    st = np.zeros((2, int(SR * 2.2)))
+    for i, m in enumerate((69, 73, 76, 81, 85, 88)):
+        place(st, vibe(m, 1.4), 0.075 * i, 0.5, pan=-0.5 + 0.2 * i)
+    place(st, bass(45, 1.0), 0.0, 0.8)
+    place(st, ride(1.6), 0.42, 0.25, pan=0.4)
+    save("levelup", reverb(st, 0.3), peak_db=-3)
+
+    # combo: short upward blip
+    t = T(0.18)
+    f = 600 + 900 * (t / 0.18)
+    x = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / 0.08)
+    save("combo", fade(x, 0.002, 0.03), peak_db=-8, bitrate="96k")
+
+    # click: soft menu click
+    t = T(0.05)
+    x = lp(hp(noise(len(t)), 1200), 5000) * np.exp(-t / 0.004) + 0.4 * np.sin(2 * np.pi * 900 * t) * np.exp(-t / 0.01)
+    save("click", fade(x, 0.0005, 0.005), peak_db=-10, bitrate="96k")
+
+    # buy: cash drawer + coin
+    st = np.zeros((2, int(SR * 0.8)))
+    t = T(0.25)
+    drawer = bp(noise(len(t)), 300, 2500) * np.exp(-t / 0.05)
+    place(st, drawer, 0.0, 0.7)
+    bell = np.sin(2 * np.pi * 2093 * T(0.6)) * np.exp(-T(0.6) / 0.18)
+    place(st, bell, 0.1, 0.5)
+    save("buy", reverb(st, 0.15, dur=0.6, tau=0.15), peak_db=-5, bitrate="96k")
+
+    # achieve: warm three-note chord bloom
+    st = np.zeros((2, int(SR * 1.9)))
+    for i, m in enumerate((72, 76, 79, 84)):
+        place(st, vibe(m, 1.7, 0.8), 0.04 * i, 0.45, pan=-0.3 + 0.2 * i)
+    place(st, bass(48, 1.0), 0.0, 0.7)
+    save("achieve", reverb(st, 0.3), peak_db=-3)
+
+
 # ---------- background music: slow noir jazz, 16 bars, seamless loop ----------
 def music():
     bpm = 84.0
@@ -244,5 +298,10 @@ def music():
 
 if __name__ == "__main__":
     import sys
-    if "--music-only" not in sys.argv: sfx()
-    music()
+    if "--rewards-only" in sys.argv:
+        sfx_rewards()
+    else:
+        if "--music-only" not in sys.argv:
+            sfx()
+            sfx_rewards()
+        music()

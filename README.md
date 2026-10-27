@@ -2,68 +2,71 @@
 
 **Play it: https://r4flutter.github.io/WhoLies/**
 
-A daily detective game for the browser. Every day there are 5 short cases. In each one, the police checked some facts and 3 suspects tell their story. One story can't be true. Players tap the liar, then share a spoiler-free result like this:
+A detective game for the browser. In every case the police checked a few facts and three suspects tell their story. One story can't be true. Tap the liar.
 
-```
-Who's Lying? #12
-🟩🟩🟥🟨🟩 4/5  ⏱️ 2:13
-🔥 6-day streak
-🏆 #23 on today's leaderboard
-https://r4flutter.github.io/WhoLies/
-```
-
-It is plain HTML, CSS and JavaScript with no build step. It's hosted free on GitHub Pages, and the optional leaderboard runs on Firebase's free plan.
+It is plain HTML, CSS and JavaScript with no build step. The web version is hosted free on GitHub Pages. A one-command build makes the CrazyGames version (section 3).
 
 ---
 
-## What's included
+## What's in the game
 
-| Feature | What it does |
+**Three ways to play**
+
+| Mode | What it is |
 |---|---|
-| Daily cases | 5 cases a day, the same for everyone. Case 5 is always a twist. New set at local midnight. |
-| Twist cases | "Two are lying, find the honest one" or "everyone is honest, find the fake fact". |
-| Share grid | Wordle-style emoji result with a tappable link, plus native share (phones), copy, WhatsApp and X buttons. |
-| Streaks and stats | Days played, current and best streak, perfect days, score chart. Saved in the browser, no login. |
-| Endless mode | Unlimited cases, a timer that gets faster, 3 lives, one second chance. |
-| Leaderboard | Today, yesterday and endless top 100. Players pick a detective name, no email or password. |
-| Top-100 rewards | Finish in a day's top 100 to win a badge (🥇 🥈 🥉 🎖️ 🏅) shown next to your name, plus a prize hint. |
-| Sound | Sound effects and a noir-jazz music loop, with separate music and sound buttons. |
-| Hints | Rules out one wrong option. A hinted case shows 🟨 in the daily result. |
-| Past cases page | Replay any past day and read every answer with the explanation (good for Google searches). |
-| Ads ready | AdSense H5 Games Ads (full-screen and rewarded) plus an optional banner. Off until you switch it on. |
-| Never runs out | 75 hand-written cases cover the first 25 days. After that, a generator writes new cases forever. |
-| Works everywhere | Phones, tablets and desktop, light and dark mode, keyboard (keys 1-5, Enter, Esc), reduced motion. |
+| Career | Endless chapters of 10 cases (Rookie Beat, Downtown, The Harbor…). Cases get harder as you go. Cases 5 and 10 of each chapter are twists. Earn up to 3 stars per case by being fast and not using hints. New players land straight in case 1 with a short coach. |
+| Rush | Catch as many liars as you can against the clock. 3 lives, a combo multiplier, a faster clock as you go, and one second chance per run. |
+| Daily Case | 5 cases a day, the same for everyone, with a streak and a shareable result. |
+
+**Twist cases:** "two are lying, find the honest one" and "everyone is honest, find the fake fact".
+
+**Why players come back**
+
+| Hook | What it does |
+|---|---|
+| Stars and chapters | 3 stars per case, a chapter map, replay any case to improve your stars. |
+| Streak bonus | Solve cases in a row on the first try for up to ×2 coins. |
+| Levels and titles | XP from every case. Rookie → Patrol Officer → … → Legend, with a badge that changes metal. Level-ups pay coins. |
+| Coins and shop | Spend coins on Magnifiers (rule out a wrong answer), Time Freezes (+10 s in Rush) and 6 desk themes. |
+| Daily missions | 3 new missions every day ("Earn 3 stars on 3 cases"…), plus a mission chest when all 3 are done. |
+| 7-day login calendar | A bigger reward each day you come back, with an option to double it by watching an ad. |
+| Achievements | 22 achievements with coin rewards. |
+| What's next | Every results screen shows your level bar and the next mission, so there's always one more goal. |
+| Sound and juice | Sound effects, a noir-jazz music loop, stamps, confetti, floating rewards, screen shake. |
+
+**Works everywhere:** phones, tablets and desktop, 16:9 game frames down to 800×450, light and dark mode, keyboard (1–5, Enter, Esc), reduced motion.
+
+**Never runs out:** 75 hand-written cases plus a generator with 55 fact types and 50 story openers. `node tools/check-cases.mjs` tests 500 career levels, 300 Rush cases and 400 days of daily cases.
 
 ---
 
 ## Folder map
 
 ```
-index.html            the game
-archive.html          past cases + answers
-privacy.html          privacy page (needed for AdSense)
-404.html              "page not found" page
-css/style.css         all the styles
-js/config.js          ← YOUR SETTINGS (edit this)
-js/cases.js           hand-written cases (add your own here)
-js/engine.js          daily picker, case generator, portraits, saving
-js/game.js            the game screens, sound, leaderboard screens
-js/leaderboard.js     leaderboard + rewards (Firebase)
-js/ads.js             ad layer (none / demo / AdSense)
-js/archive.js         past cases page
-assets/audio/         sound effects + music (mp3)
-assets/               fonts, icons, share image (og-image.png)
-firebase/             database rules + index for the leaderboard
-tools/check-cases.mjs       checks your cases for mistakes
-tools/elevenlabs-audio.mjs  remakes all sounds with ElevenLabs
-tools/synth-audio.py        rebuilds the built-in sounds
+index.html                 the game
+archive.html               past daily cases + answers (web only)
+privacy.html, 404.html     web pages
+css/style.css              all the styles
+js/config.js               ← YOUR SETTINGS (edit this)
+js/cases.js                hand-written cases
+js/engine.js               case generator, career and Rush difficulty, portraits
+js/progress.js             levels, coins, stars, missions, login calendar, shop, achievements
+js/game.js                 all the screens
+js/platform.js             web vs CrazyGames: ads, saves, mute, username, invite links
+js/audio.js, js/fx.js      sound and visual effects
+js/leaderboard.js          web leaderboard + top-100 rewards (Firebase)
+js/ads.js                  web ads (none / demo / AdSense)
+assets/                    sounds, music, fonts, icons
+firebase/                  database rules for the web leaderboard
+tools/build-crazygames.mjs builds the CrazyGames zip
+tools/check-cases.mjs      checks every case for mistakes
+tools/elevenlabs-audio.mjs remakes all sounds with ElevenLabs
+tools/synth-audio.py       rebuilds the built-in sounds
 ```
 
 ---
 
 ## 1. Try it on your computer
-
-Run a tiny local server in this folder:
 
 ```
 python -m http.server 8000
@@ -71,18 +74,18 @@ python -m http.server 8000
 
 Then open http://localhost:8000.
 
-Useful test addresses:
+Test addresses:
 - `?ads=demo` shows grey boxes where ads will appear.
-- `?lb=demo` turns on the leaderboard with made-up players, so you can try it before Firebase is set up. Nothing is uploaded.
-- `#endless` jumps straight into endless mode.
+- `?lb=demo` turns on the leaderboard with made-up players.
+- `#endless` jumps straight into Rush.
+
+To start over, clear the site's data in your browser (the save is in `localStorage` under `whoslying:v1`).
 
 ---
 
-## 2. Hosting (GitHub Pages)
+## 2. Web hosting (GitHub Pages)
 
-The game is live at **https://r4flutter.github.io/WhoLies/**. Every push to the `main` branch updates it within a minute or two.
-
-To change something: edit the files, then
+The game is live at **https://r4flutter.github.io/WhoLies/**. Every push to `main` updates it within a minute or two.
 
 ```
 git add -A
@@ -90,73 +93,107 @@ git commit -m "Describe your change"
 git push
 ```
 
-### Move to your own .com later
-
-1. Buy a domain (Cloudflare Registrar or Namecheap).
-2. In the repo on GitHub: **Settings → Pages → Custom domain**, type your domain and follow the DNS steps. Tick **Enforce HTTPS**.
-3. Change `siteUrl` in `js/config.js`, and the address in `index.html`, `archive.html`, `privacy.html`, `robots.txt` and `sitemap.xml`.
-4. If the leaderboard is on, add the new domain in Firebase: **Authentication → Settings → Authorized domains**.
+**Move to your own .com later:** buy a domain, then in the repo go to **Settings → Pages → Custom domain** and follow the DNS steps. Change `siteUrl` in `js/config.js` and the address in `index.html`, `archive.html`, `privacy.html`, `robots.txt` and `sitemap.xml`.
 
 ---
 
-## 3. Switch on the leaderboard (Firebase, free, about 10 minutes)
+## 3. CrazyGames
 
-The leaderboard stays hidden until you do this. Firebase's free plan covers thousands of players a day.
+### Build the upload file
 
-1. Go to https://console.firebase.google.com and click **Create a project**. Name it (for example `who-lies`). You can turn Google Analytics off.
-2. **Build → Authentication → Get started → Sign-in method → Anonymous → Enable → Save.**
-   Players get a random ID. No email or password.
-3. **Build → Firestore Database → Create database.** Pick a location near your players, choose **production mode**, and click Create.
-4. In Firestore, open the **Rules** tab. Delete what's there, paste everything from `firebase/firestore.rules` and click **Publish**.
-5. In Firestore, open **Indexes → Composite → Create index**:
-   - Collection ID: `scores`
-   - Fields: `day` Ascending, `score` Descending, `timeMs` Ascending
-   - Query scope: Collection
-   Click Create. It takes a few minutes to build.
-6. Click the gear icon → **Project settings → Your apps → Web (`</>`)**. Register an app (no hosting needed) and copy the `firebaseConfig` object.
-7. Paste it into `js/config.js`:
-   ```js
-   leaderboard: {
-     firebase: {
-       apiKey: "AIza...",
-       authDomain: "who-lies.firebaseapp.com",
-       projectId: "who-lies",
-       appId: "1:1234:web:abcd"
-     }
-   },
-   ```
-   This key is meant to be public. The rules from step 4 protect the data.
-8. Commit and push. The 🏆 button appears in the game.
+Needs Node.js 18+:
 
-How it works:
-- After finishing the daily cases, players can join with a detective name. Their score posts once per day and can't be changed.
-- Ranking: more liars caught first, then the faster time.
-- A day's ranks lock in 38 hours after it starts, once every time zone has finished it. The next time a top-100 player opens the game, they get their reward: 🥇 #1 Chief Inspector, 🥈 #2 Inspector, 🥉 #3 Sergeant, 🎖️ #4-10 Detective, 🏅 #11-100 Sharp Eye. They also get one prize hint, which skips the ad when ads are on.
-- Endless mode keeps each player's best run.
-- The rules block impossible scores (wrong format, faster than 20 seconds, duplicates, out-of-date days). A determined cheater can still fake a believable score, as with any browser game. If that becomes a problem, add Firebase App Check.
+```
+node tools/build-crazygames.mjs
+```
 
-If you change `launchDate` in `js/config.js`, change the date on the `dayStart` line in `firebase/firestore.rules` too, then publish the rules again.
+This makes `dist/whos-lying-crazygames.zip` (about 1.3 MB, 39 files). Upload that zip. The build:
+- adds the CrazyGames SDK v3
+- sends ads, saves, the mute setting, the username and invite links through the SDK
+- removes everything CrazyGames doesn't allow: AdSense, the Firebase leaderboard, WhatsApp/X buttons, links to other pages
+
+### How it follows the CrazyGames rules
+
+- Players land straight in gameplay (case 1 with a short coach).
+- `loadingStart`/`loadingStop` around loading, `gameplayStart`/`gameplayStop` around every case, `happytime` on big wins.
+- **Midgame ads** only between cases (next career case, end of a Rush run, end of the Daily), never in a player's first minute or first 3 solved cases. The screen is blocked while an ad plays.
+- **Rewarded ads** are always the player's choice: a hint when out of Magnifiers (not during Rush, 90-second cooldown), one extra Rush life, double login reward, +40 shop coins (4-minute cooldown). No reward if the ad fails. Never a midgame and a rewarded ad in the same break.
+- Sound is muted only once an ad really starts, and comes back after. The CrazyGames mute setting overrides the game's own switches.
+- Adblock players can still play. Rewarded buttons fall back to free versions or hide.
+- Progress saves through the CrazyGames Data module, so it follows signed-in players across devices.
+- Share buttons copy a CrazyGames invite link. Opening one starts that Daily or Rush.
+- Relative paths only, no external links, no fullscreen button, readable at 800×450.
+
+### Submit it
+
+1. Sign up at https://developer.crazygames.com and click **Add game**.
+2. Upload `dist/whos-lying-crazygames.zip`. Choose **HTML5**.
+3. Turn on **Progress Save** (Data module) in the submission form.
+4. Orientation: **Both** (it works in landscape and portrait). Mobile: **Yes**.
+5. Upload the covers and preview videos from the store-assets pack.
+6. Paste the title, description, controls and tags below.
+7. Use the **Preview** tool and play a full case, a Rush run and the Daily.
+
+**Title:** Who's Lying?
+
+**Short description:**
+Catch the liar! Read the facts, compare three stories and tap the suspect whose story can't be true.
+
+**Description:**
+Who's Lying? is a detective puzzle game for sharp eyes. In every case, the police checked a few facts and three suspects tell you where they were. One of them is lying. Find the story that can't be true and stamp it LIAR.
+
+Climb through career chapters from Rookie Beat to Final Verdict, earn 3 stars by solving fast without hints, and watch out for twist cases where two people lie, or everyone tells the truth and a fact was planted. Race the clock in Rush mode, build combos for bonus coins, and come back for 5 new Daily Cases every day.
+
+Level up from Rookie to Legend, finish daily missions, open the mission chest, collect your login reward, unlock 22 achievements and buy new desk themes in the shop.
+
+**Controls:**
+- Mouse or touch: tap a suspect (or a fact in twist cases), then tap Accuse
+- Keyboard: 1–5 to pick, Enter to accuse, Esc to cancel
+
+**Tags:** detective, logic, puzzle, mystery, brain, casual, deduction, 1 player, mobile, trivia
+
+**Category:** Puzzle
+
+### Leaderboard on CrazyGames
+
+CrazyGames leaderboards are invite-only. If they invite the game, paste the **Encryption Key** from the developer portal into `crazygames.leaderboardKey` in `js/config.js` and rebuild. Rush best scores are then submitted automatically.
 
 ---
 
-## 4. Sound and music
+## 4. Web leaderboard (Firebase, free, about 10 minutes)
 
-The game ships with built-in sound effects and a 47-second noir-jazz music loop in `assets/audio/`. Players can switch music and sound off separately (header buttons), and the choice is remembered.
+The web leaderboard stays hidden until you do this.
+
+1. Go to https://console.firebase.google.com → **Create a project**.
+2. **Build → Authentication → Get started → Sign-in method → Anonymous → Enable.**
+3. **Build → Firestore Database → Create database**, production mode.
+4. **Rules** tab: paste everything from `firebase/firestore.rules` → **Publish**.
+5. **Indexes → Composite → Create index**: collection `scores`, fields `day` Ascending, `score` Descending, `timeMs` Ascending.
+6. Gear icon → **Project settings → Your apps → Web (`</>`)** → register an app and copy `firebaseConfig`.
+7. Paste it into `js/config.js` → `leaderboard.firebase`. This key is meant to be public; the rules protect the data.
+8. Commit and push. The 🏆 button appears.
+
+Daily top-100 players get a badge (🥇 🥈 🥉 🎖️ 🏅) and a prize hint once the day's ranks lock in (38 hours after it starts). If you change `launchDate`, change the `dayStart` line in `firebase/firestore.rules` too.
+
+---
+
+## 5. Sound and music
+
+Built-in sounds live in `assets/audio/`. Music and sound switches are in Settings (gear icon).
 
 | File | When it plays |
 |---|---|
-| `tap.mp3` | selecting a suspect |
-| `stamp.mp3` | the LIAR / HONEST / FAKE stamp |
-| `correct.mp3`, `wrong.mp3` | after each answer |
-| `twist.mp3` | a twist case appears |
-| `whoosh.mp3` | next case, hints |
-| `tick.mp3`, `timeout.mp3` | the last seconds in endless mode, time running out |
-| `fanfare.mp3`, `fail.mp3` | the results screen, rewards |
-| `music.mp3` | background loop (crossfaded, so it loops smoothly) |
+| `tap`, `click` | picking a suspect, buttons |
+| `stamp` | the LIAR / HONEST / FAKE stamp |
+| `correct`, `wrong` | after each answer |
+| `twist` | a twist case appears |
+| `whoosh` | next case, hints |
+| `tick`, `timeout` | the last seconds in Rush, time running out |
+| `fanfare`, `fail` | results screens |
+| `coin`, `star`, `combo`, `levelup`, `buy`, `achieve` | rewards |
+| `music` | background loop (crossfaded, so it loops smoothly) |
 
-### Remake them with ElevenLabs
-
-Run this on your own computer (Node.js 18+). It replaces the files above with AI-generated ones, using the same names.
+**Remake them with ElevenLabs** on your own computer (Node.js 18+):
 
 Windows (PowerShell):
 ```
@@ -167,53 +204,27 @@ macOS / Linux:
 ELEVENLABS_API_KEY=your_key_here node tools/elevenlabs-audio.mjs
 ```
 
-- `--only stamp,twist` remakes just those sounds. `--music-only` and `--no-music` also work.
-- Edit the prompts at the top of the script to change how anything sounds.
-- Listen in the game, then `git add assets/audio && git commit -m "New sounds" && git push`.
-
-Never put your API key in a file in this repo. The repo is public, and anyone could use your credits.
-
-You can change volumes in `js/config.js` → `audio`.
+`--only stamp,coin` remakes just those. `--music-only` and `--no-music` also work. Never put your API key in a file in this repo: the repo is public.
 
 ---
 
-## 5. Switch on ads (when you have some traffic)
+## 6. Web ads (when you have traffic)
 
-Ads slow down sharing at the start, so launch with `provider: "none"` and add ads once players are coming back.
+Launch with `provider: "none"`. Later:
 
-1. Apply for Google AdSense at https://adsense.google.com with your site.
-2. AdSense gives you a code snippet. Paste it in `index.html` where the comment says **GOOGLE ADSENSE**.
-3. In AdSense, apply for **H5 Games Ads** (the game-ad program). Approval isn't guaranteed.
-4. In AdSense, open **Privacy & messaging** and turn on the **European regulations** message. Google requires a certified consent message for users in the EU, UK and Switzerland, and this is Google's own.
-5. Edit `ads.txt`: remove the `#` from the last line and put in your publisher ID. (ads.txt must sit at the root of a domain, so this works once you're on your own .com.)
-6. In `js/config.js`, set:
-   ```
-   provider: "adsense",
-   adsenseClient: "ca-pub-YOUR-NUMBER",
-   adsenseTestMode: true    // switch to false when Google approves H5 Games Ads
-   ```
+1. Apply for Google AdSense, then for **H5 Games Ads**.
+2. Paste the AdSense snippet in `index.html` where the comment says **GOOGLE ADSENSE**.
+3. Turn on the **European regulations** consent message in AdSense → Privacy & messaging.
+4. Edit `ads.txt` with your publisher ID (needs your own domain).
+5. In `js/config.js`: `provider: "adsense"`, `adsenseClient: "ca-pub-…"`, `adsenseTestMode: true` until approved.
 
-Where ads appear:
-- **Full-screen ad** when starting endless mode, and after every 4 endless cases (Google spaces them out using `frequencyHint`).
-- **Rewarded ad** when a player asks for a hint, or for a second chance in endless mode. Top-100 prize hints skip the ad.
-- **Banner** (optional) under the results screen and on the past cases page. Create a display ad unit in AdSense and put its number in `displaySlot`.
-- The daily cases themselves are never interrupted, so sharing and streaks stay smooth.
-
-Never click your own ads or buy cheap traffic. Google bans accounts for invalid traffic.
+Ads use the same placements as on CrazyGames (section 3).
 
 ---
 
-## 6. Add your own cases
+## 7. Add your own cases
 
-Open `js/cases.js`. There are three lists:
-
-- `medium`: one per day, case 2
-- `hard`: one per day, case 4
-- `twist`: one per day, case 5
-
-Day 1 uses the first item of each list, day 2 the second, and so on. Add new cases to the end of each list. When a list runs out, the generator fills in automatically.
-
-A normal case:
+Open `js/cases.js`. The lists `medium`, `hard` and `twist` feed Daily cases 2, 4 and 5. Day 1 uses the first item of each list, and so on. The generator fills in when a list runs out. Career and Rush always use the generator.
 
 ```js
 {
@@ -233,43 +244,18 @@ A normal case:
 }
 ```
 
-Twist cases add `mode`:
-- `mode: "honest"`: two people lie. `answer` is the **one honest** suspect.
-- `mode: "planted"`: everyone tells the truth. `answer` is the **fake clue** (0 = first clue).
-- Optional `twist: "..."` adds a short reveal line after the answer.
+Twist cases add `mode: "honest"` (`answer` is the one honest suspect) or `mode: "planted"` (`answer` is the fake clue). Optional `twist: "..."` adds a reveal line.
 
-Rules for good cases:
-- Exactly one statement contradicts the facts. Read the honest ones twice and make sure they can't look like lies.
-- Keep the English simple. Players come from everywhere.
-- Name the liar in `why`.
-
-Then check your work (needs Node.js):
+Rules: exactly one statement contradicts the facts, simple English, name the liar in `why`. Then run:
 
 ```
 node tools/check-cases.mjs
 ```
 
-It checks every case and 400 days of generated ones, and tells you exactly what to fix.
-
-Note: if you change cases for days that already happened, the past cases page shows the new version.
-
----
-
-## 7. Launch checklist
-
-- [ ] Opened the live site on your phone and played a full day
-- [ ] Tested the share button and the WhatsApp button
-- [ ] Leaderboard set up (section 3) and tested with a friend
-- [ ] Added the site in Google Search Console and submitted `sitemap.xml`
-- [ ] Wrote extra cases so you're ahead of the calendar
-- [ ] Posted today's case as a short video (each case makes a great 20-second "Can you spot the liar?" clip)
-
 ---
 
 ## Tech notes
 
-- Everyone gets the same daily cases because they come from a seeded random number generator keyed to the day number.
-- Progress is saved in `localStorage` under the key `whoslying:v1`.
-- The page loads under 300 KB before sound. Sound effects (about 200 KB) load in the background, and the music (about 650 KB) loads only after the first tap.
-- Firebase loads only for players who open the leaderboard or have joined it, so everyone else gets the light page.
-- Fonts: Big Shoulders Display and Atkinson Hyperlegible, both under the SIL Open Font License (license files are in `assets/fonts`).
+- Daily cases come from a random number generator seeded with the day number, so everyone gets the same ones. Career level N is seeded with N, so it's the same for every player too.
+- The game code, styles and fonts are about 420 KB. Sounds load after the first tap.
+- Fonts: Big Shoulders Display and Atkinson Hyperlegible (SIL Open Font License, files in `assets/fonts`).
