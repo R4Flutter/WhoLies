@@ -75,6 +75,22 @@ for (let n = 1; n <= 2000; n++) {
   const text = JSON.stringify(c);
   if (/NaN|undefined|\$-|\$0\b/.test(text)) fail(`number puzzle ${n}`, "bad number in: " + text.slice(0, 160));
 }
+// Night Shift: 400 days.
+for (let d = 1; d <= 400; d++) checkCase(WL.buildNight(d), `night ${d}`, true);
+// Case of the Week: 400 weeks. The mastermind fits every clue, everyone else is ruled out,
+// and every clue rules out someone that no other clue does (so no clue is wasted).
+for (let w = 1; w <= 400; w++) {
+  const k = WL.buildWeek(w), where = `week ${w}`;
+  if (k.suspects.length !== 8 || k.clues.length !== 6) { fail(where, "needs 8 suspects and 6 clues"); continue; }
+  if (new Set(k.suspects.map((s) => s.name)).size !== 8) fail(where, "suspect names must be different");
+  const hits = {};
+  k.clues.forEach((c) => {
+    if (c.out.includes(k.answer)) fail(where, `a clue rules out the mastermind: ${c.text}`);
+    c.out.forEach((s) => { hits[s] = (hits[s] || 0) + 1; });
+  });
+  if (Object.keys(hits).length !== 7) fail(where, "the clues don't rule out everyone else");
+  k.clues.forEach((c, i) => { if (!c.out.some((s) => hits[s] === 1)) fail(where, `clue ${i + 1} isn't needed`); });
+}
 const careerA = JSON.stringify(WL.buildCareerLevel(77));
 // Same day must build the same cases every time (everyone plays the same puzzle).
 const a = JSON.stringify(WL.buildDay(7)), b = JSON.stringify(WL.generateCase && WL.buildDay(7));

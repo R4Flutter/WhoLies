@@ -8,6 +8,16 @@
         { "fieldPath": "score", "order": "DESCENDING" },
         { "fieldPath": "timeMs", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "league",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "week", "order": "ASCENDING" },
+        { "fieldPath": "tier", "order": "ASCENDING" },
+        { "fieldPath": "pts", "order": "DESCENDING" },
+        { "fieldPath": "timeMs", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

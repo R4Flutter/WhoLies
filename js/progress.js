@@ -29,8 +29,12 @@
     magnifier1: { kind: "item", item: "magnifier", qty: 1, price: 60, name: "Magnifier", desc: "Rules out one wrong answer." },
     magnifier5: { kind: "item", item: "magnifier", qty: 5, price: 250, name: "5 Magnifiers", desc: "Save 50 coins." },
     freeze1: { kind: "item", item: "freeze", qty: 1, price: 50, name: "Time Freeze", desc: "Adds 10 seconds in Rush." },
-    freeze3: { kind: "item", item: "freeze", qty: 3, price: 120, name: "3 Time Freezes", desc: "Save 30 coins." }
+    freeze3: { kind: "item", item: "freeze", qty: 3, price: 120, name: "3 Time Freezes", desc: "Save 30 coins." },
+    shield1: { kind: "item", item: "shield", qty: 1, price: 200, name: "Streak Shield", desc: "Saves your Daily streak if you miss a day. Hold up to 2." },
+    key1: { kind: "item", item: "key", qty: 1, price: 120, name: "Case Key", desc: "Catch up on a Daily Case you missed, with full rewards." },
+    key3: { kind: "item", item: "key", qty: 3, price: 300, name: "3 Case Keys", desc: "Save 60 coins." }
   };
+  var MAX_SHIELDS = 2;
   var THEMES = [
     { id: "auto", name: "Match my device", price: 0, swatch: ["#e7eee5", "#0e1612", "#c22438"] },
     { id: "precinct", name: "Precinct", price: 0, swatch: ["#e7eee5", "#142029", "#c22438"] },
@@ -44,7 +48,7 @@
   /* ---------- 7-day login calendar ---------- */
   var LOGIN = [
     { coins: 30 }, { coins: 40 }, { coins: 20, magnifier: 1 }, { coins: 60 },
-    { coins: 40, freeze: 1 }, { coins: 80 }, { coins: 150, magnifier: 2 }
+    { coins: 40, freeze: 1 }, { coins: 80 }, { coins: 150, magnifier: 2, key: 1 }
   ];
 
   /* ---------- daily missions ---------- */
@@ -82,7 +86,15 @@
     { id: "chapter10", name: "Final Verdict", desc: "Finish chapter 10", stat: "chapters", goal: 10, coins: 800 },
     { id: "level10", name: "Promoted", desc: "Reach level 10", stat: "level", goal: 10, coins: 100 },
     { id: "level25", name: "Decorated", desc: "Reach level 25", stat: "level", goal: 25, coins: 250 },
-    { id: "theme", name: "New Look", desc: "Buy a desk theme", stat: "themesBought", goal: 1, coins: 50 }
+    { id: "theme", name: "New Look", desc: "Buy a desk theme", stat: "themesBought", goal: 1, coins: 50 },
+    { id: "streak7", name: "Week Warrior", desc: "Play the Daily Case 7 days in a row", stat: "bestStreak", goal: 7, coins: 100 },
+    { id: "streak30", name: "Iron Habit", desc: "Play the Daily Case 30 days in a row", stat: "bestStreak", goal: 30, coins: 500 },
+    { id: "shield", name: "Saved by the Shield", desc: "Let a Streak Shield save your streak", stat: "shieldSaves", goal: 1, coins: 50 },
+    { id: "night5", name: "Graveyard Shift", desc: "Solve 5 Night Shift cases", stat: "nights", goal: 5, coins: 150 },
+    { id: "master1", name: "Mastermind Hunter", desc: "Catch the mastermind in a Case of the Week", stat: "masterminds", goal: 1, coins: 150 },
+    { id: "master4", name: "Most Wanted", desc: "Catch 4 weekly masterminds", stat: "masterminds", goal: 4, coins: 400 },
+    { id: "rival3", name: "Top Dog", desc: "Beat 3 friends' challenges", stat: "challengesWon", goal: 3, coins: 150 },
+    { id: "promoted", name: "Moving Up", desc: "Get promoted in the weekly league", stat: "promotions", goal: 1, coins: 100 }
   ];
 
   /* ---------- helpers ---------- */
@@ -100,9 +112,10 @@
     S = state;
     S.xp = S.xp || 0;
     S.coins = S.coins || 0;
-    S.inv = Object.assign({ magnifier: 3, freeze: 1 }, S.inv || {});
+    S.inv = Object.assign({ magnifier: 3, freeze: 1, shield: 1, key: 2 }, S.inv || {});
     S.career = Object.assign({ level: 1, stars: {}, combo: 0 }, S.career || {});
-    S.tot = Object.assign({ solved: 0, stars3: 0, nohint: 0, twists: 0, bestCombo: 0, rushBest: 0, dailyDone: 0, perfectDays: 0, chapters: 0, themesBought: 0, liars: 0 }, S.tot || {});
+    S.tot = Object.assign({ solved: 0, stars3: 0, nohint: 0, twists: 0, bestCombo: 0, rushBest: 0, dailyDone: 0, perfectDays: 0, chapters: 0, themesBought: 0, liars: 0,
+      bestStreak: 0, shieldSaves: 0, nights: 0, masterminds: 0, challengesWon: 0, promotions: 0 }, S.tot || {});
     S.themes = Object.assign({ owned: ["auto", "precinct", "night"], current: "auto" }, S.themes || {});
     S.ach = S.ach || {};
     S.login = S.login || { last: "", streak: 0, pending: false };
@@ -117,11 +130,16 @@
   /* ---------- coins, items, xp ---------- */
   function addCoins(n) { S.coins = Math.max(0, S.coins + n); emit("coins", { delta: n, total: S.coins }); }
   function addItem(item, n) { S.inv[item] = (S.inv[item] || 0) + n; }
+  // Gives a reward. Shields over the limit turn into 100 coins each.
   function grant(reward) {
     if (!reward) return;
     if (reward.coins) addCoins(reward.coins);
-    if (reward.magnifier) addItem("magnifier", reward.magnifier);
-    if (reward.freeze) addItem("freeze", reward.freeze);
+    ["magnifier", "freeze", "key"].forEach(function (k) { if (reward[k]) addItem(k, reward[k]); });
+    if (reward.shield) {
+      var room = Math.max(0, MAX_SHIELDS - (S.inv.shield || 0)), add = Math.min(room, reward.shield);
+      addItem("shield", add);
+      if (reward.shield > add) addCoins(100 * (reward.shield - add));
+    }
   }
   function addXp(n) {
     var before = levelInfo(S.xp);
@@ -200,7 +218,7 @@
 
   // Daily: one result per case, and the end of the day's set
   function dailyCase(o) {
-    if (o.replay) return { coins: 0, xp: o.correct ? 10 : 0 };
+    if (o.replay && !o.catchup) return { coins: 0, xp: o.correct ? 10 : 0 };
     var coins = o.correct ? 12 : 0, xp = o.correct ? 35 : 5;
     if (o.correct) {
       S.tot.solved++; S.tot.liars++;
@@ -211,16 +229,61 @@
     addXp(xp);
     return { coins: coins, xp: xp };
   }
-  function dailyDone(score, replay) {
-    if (replay) return { bonus: 0, perfect: 0 };
+  function dailyDone(score, replay, catchup) {
+    if (replay && !catchup) return { bonus: 0, perfect: 0 };
     S.tot.dailyDone++;
     var done = 25, perfect = score === 5 ? 50 : 0;
     if (score === 5) S.tot.perfectDays++;
     addCoins(done + perfect);
-    missionProgress("daily", 1);
+    if (!catchup) missionProgress("daily", 1);
     checkAch();
     return { bonus: done, perfect: perfect };
   }
+
+  /* ---------- streaks, shields, keys, comeback ---------- */
+  // After a Daily: every 7th day in a row pays a Case Key and a Streak Shield.
+  function streakDay(streak) {
+    S.tot.bestStreak = Math.max(S.tot.bestStreak, streak);
+    var reward = streak > 0 && streak % 7 === 0 ? { key: 1, shield: 1 } : null;
+    grant(reward);
+    checkAch();
+    return reward;
+  }
+  // On start-up: shields cover the days missed since the last Daily, if there are enough of them.
+  function coverStreak(today) {
+    var st = S.stats;
+    if (!st || st.streak < 1 || !st.lastDay) return null;
+    var missed = today - 1 - st.lastDay;
+    if (missed < 1 || missed > (S.inv.shield || 0)) return null;
+    S.inv.shield -= missed;
+    st.lastDay = today - 1;
+    S.tot.shieldSaves += missed;
+    checkAch();
+    return { used: missed, streak: st.streak };
+  }
+  var COMEBACK = { coins: 150, magnifier: 2, key: 1 };
+  function comeback() { grant(COMEBACK); return COMEBACK; }
+
+  /* ---------- Night Shift + Case of the Week ---------- */
+  function nightDone(o) {
+    var coins = o.correct ? 40 : 0, xp = o.correct ? 60 : 10;
+    if (o.correct) {
+      S.tot.solved++; S.tot.liars++; S.tot.nights++;
+      if (!o.hint) { S.tot.nohint++; missionProgress("nohint", 1); }
+      if (o.twist) { S.tot.twists++; missionProgress("twist", 1); }
+    }
+    if (coins) addCoins(coins);
+    addXp(xp);
+    return { coins: coins, xp: xp };
+  }
+  function mastermindDone(correct) {
+    var coins = correct ? 250 : 40, xp = correct ? 200 : 30;
+    if (correct) S.tot.masterminds++;
+    addCoins(coins);
+    addXp(xp);
+    return { coins: coins, xp: xp };
+  }
+  function count(stat) { S.tot[stat] = (S.tot[stat] || 0) + 1; checkAch(); }
 
   /* ---------- missions ---------- */
   function ensureMissions() {
@@ -325,6 +388,7 @@
   function buy(id) {
     var it = ITEMS[id];
     if (it) {
+      if (it.item === "shield" && (S.inv.shield || 0) >= MAX_SHIELDS) return { ok: false, msg: "You can hold " + MAX_SHIELDS + " shields at a time." };
       if (S.coins < it.price) return { ok: false, msg: "You need " + (it.price - S.coins) + " more coins." };
       addCoins(-it.price); addItem(it.item, it.qty);
       return { ok: true, msg: it.name + " added." };
@@ -353,7 +417,8 @@
   window.WLP = {
     init: function (state, h) { hooks = h || {}; return ensure(state); },
     levelInfo: levelInfo, titleFor: titleFor, nextTitle: nextTitle, tierFor: tierFor, TITLES: TITLES,
-    ITEMS: ITEMS, THEMES: THEMES, LOGIN: LOGIN, CHEST: CHEST,
+    ITEMS: ITEMS, THEMES: THEMES, LOGIN: LOGIN, CHEST: CHEST, COMEBACK: COMEBACK, MAX_SHIELDS: MAX_SHIELDS,
+    streakDay: streakDay, coverStreak: coverStreak, comeback: comeback, nightDone: nightDone, mastermindDone: mastermindDone, count: count,
     addCoins: addCoins, grant: grant, addXp: addXp,
     careerSolved: careerSolved, careerWrong: careerWrong,
     rushCatch: rushCatch, rushEnd: rushEnd, dailyCase: dailyCase, dailyDone: dailyDone, comboMult: comboMult,

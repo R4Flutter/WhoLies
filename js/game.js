@@ -4,8 +4,12 @@
     Career  endless chapters of 10 cases, stars, combo streak, chapter rewards
     Daily   5 cases a day, the same for everyone, one try each, share grid
     Rush    unlimited cases against the clock, 3 lives, one continue per run
-  Also: headquarters (HQ), chapter map, shop, achievements, missions, login
-  rewards, level-ups, tutorial, and (web only) the Firebase leaderboard.
+    Night   one hard bonus case each evening from 8 PM
+    Week    the Case of the Week: a clue from each Daily, the mastermind on Sunday
+  Also: headquarters (HQ), case files (catch up with Case Keys), chapter map, shop,
+  achievements, missions, login rewards, streak shields, comeback gifts, friend
+  challenges, level-ups, tutorial, and (web only) the Firebase leaderboard,
+  weekly leagues, friend groups, reminders and app install.
 */
 (function () {
   "use strict";
@@ -14,6 +18,9 @@
   var CFG = WL.cfg, esc = WL.esc;
   function $(id) { return document.getElementById(id); }
   var TODAY = WL.dayNumber();
+  var WEEK = WL.weekOf(TODAY), WDAY = WL.weekday(TODAY);
+  var DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  var CLUE_COST = 80;
   var mq = function (q) { return window.matchMedia ? window.matchMedia(q) : { matches: false, addEventListener: function () {} }; };
   var reduceMotion = mq("(prefers-reduced-motion: reduce)").matches;
   var coarse = mq("(pointer: coarse)").matches;
@@ -33,6 +40,7 @@
   var bootTime = Date.now();
   var paused = { ad: false, hidden: false };
   var queue = [];          // celebrations to show after a verdict (level-ups etc.)
+  var notices = [];        // messages to show at HQ, one at a time (comeback gift, shield saves...)
 
   function persist() { Plat.save(S); }
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -48,6 +56,14 @@
     return out + "</span>";
   }
   function dailyStreak() { return S.stats.lastDay >= TODAY - 1 ? S.stats.streak : 0; }
+  function web() { return Plat.allowExternal(); }
+  function lbOn() { return LB.enabled() && web(); }
+  function dayName(d) { return DAY_NAMES[WL.weekday(d)]; }
+  function weekDay(i) { return (WEEK - 1) * 7 + 1 + i; }
+  // A day's weekly clue is yours once you finish that day's Daily (on the day or as a catch-up) or buy it.
+  function clueOpen(i) { var h = S.history[weekDay(i)]; return !!(h && !h.replay) || !!S.arc.bought[i]; }
+  function cluesOpen() { var n = 0; for (var i = 0; i < 6; i++) if (clueOpen(i)) n++; return n; }
+  function myName() { return (user && user.username) || S.settings.playerName || ""; }
 
   /* ---------- polygraph trace (canvas) ---------- */
   function Trace(canvas, opts) {
@@ -171,6 +187,7 @@
     var d = $(id);
     if (!d) return;
     if (typeof d.close === "function") { if (d.open) d.close(); } else d.removeAttribute("open");
+    if (screen === "hq") setTimeout(pumpNotices, 300); // messages that arrived while this dialog was open
   }
   [].forEach.call(document.querySelectorAll("dialog"), function (d) {
     d.addEventListener("click", function (e) {
@@ -214,7 +231,7 @@
   }
 
   /* ---------- screens + HUD ---------- */
-  var SCREENS = ["hq", "case", "results", "map", "shop", "ach"];
+  var SCREENS = ["hq", "case", "results", "map", "shop", "ach", "files", "week"];
   function show(name) {
     screen = name;
     SCREENS.forEach(function (n) { $("scr-" + n).hidden = n !== name; });
@@ -248,6 +265,16 @@
     $("xpbar").setAttribute("aria-valuemax", li.need); $("xpbar").setAttribute("aria-valuenow", li.into);
     $("xpbar").setAttribute("aria-label", "Experience: " + li.into + " of " + li.need);
     $("xp-text").textContent = (li.need - li.into) + " XP to level " + (li.level + 1) + (nt ? " · " + nt[1] + " at level " + nt[0] : "");
+    var streak = dailyStreak(), sh = S.inv.shield || 0;
+    $("streak-n").textContent = streak;
+    $("streak-shields").innerHTML = new Array(sh + 1).join('<span class="sp"></span>');
+    $("streak-chip").classList.toggle("lit", streak > 0);
+    $("streak-chip").setAttribute("aria-label", "Daily streak: " + streak + " days. Streak Shields: " + sh);
+
+    renderToday();
+    renderWeekCard();
+    renderNightTile();
+    $("rush-sub").textContent = S.endless.best > 0 ? "Your best: " + S.endless.best + " liars" : "Catch liars against the clock";
 
     var lvl = S.career.level, ch = WL.chapterOf(lvl);
     $("career-chapter").textContent = "Career · Chapter " + ch;
@@ -256,18 +283,97 @@
     var spec = WL.careerSpec(lvl);
     $("btn-play").textContent = (lvl === 1 ? "Start case 1" : "Play case " + lvl) + (spec.mode !== "liar" ? " · Twist" : "");
 
-    var d = S.daily && S.daily.day === TODAY ? S.daily : null;
-    var sub;
-    if (d && d.done) sub = "Done: " + scoreOf(d.results) + "/5. New cases in " + WL.fmtCountdown(WL.msToNextDay());
-    else if (d && d.results.length) sub = "Case " + (d.results.length + 1) + " of 5 waiting";
-    else sub = "5 new cases today" + (dailyStreak() > 0 ? " · streak " + dailyStreak() : "");
-    $("daily-sub").textContent = sub;
-    $("daily-flag").hidden = !!(d && d.results.length);
-    $("rush-sub").textContent = S.endless.best > 0 ? "Your best: " + S.endless.best + " liars" : "Catch liars against the clock";
-
     renderMissions();
-    $("btn-board").hidden = !(LB.enabled() && Plat.allowExternal());
+    $("btn-board").hidden = !lbOn();
+    $("btn-friends").hidden = !lbOn();
+    renderLeagueCard();
+    renderBanner();
     renderCoins(false);
+  }
+  function renderToday() {
+    var d = S.daily && S.daily.day === TODAY ? S.daily : null, streak = dailyStreak();
+    var res = d ? d.results : [], done = !!(d && d.done);
+    $("today-eyebrow").textContent = "Daily Case #" + TODAY + " · " + dayName(TODAY);
+    $("today-cells").hidden = !res.length;
+    $("today-cells").innerHTML = res.length ? cells(res, 5) : "";
+    var title, sub, btn;
+    if (done) {
+      title = scoreOf(res) + " of 5 caught";
+      sub = 'New cases in <strong data-countdown="1">' + WL.fmtCountdown(WL.msToNextDay()) + "</strong>";
+      btn = "See your result";
+    } else if (res.length) {
+      title = "Case " + (res.length + 1) + " of 5";
+      sub = "You're part way through today's cases.";
+      btn = "Continue";
+    } else {
+      title = "5 new cases";
+      sub = streak > 0 ? "Play today to keep your <strong>" + streak + "-day streak</strong> alive." : "The same 5 cases for every detective today.";
+      btn = "Play today's cases";
+    }
+    $("today-title").textContent = title;
+    $("today-sub").innerHTML = sub;
+    $("btn-daily").textContent = btn;
+    $("btn-daily").className = "btn big wide " + (done ? "ghost" : "danger");
+    var meta = [], st = S.lb.stand && S.lb.stand.day === TODAY ? S.lb.stand : null;
+    if (done && st) meta.push("🏆 #" + st.rank + " of " + st.total + " today");
+    var c = S.challenge;
+    if (c && c.day === TODAY && !done) meta.push("⚔️ " + esc(c.name) + " challenged you: " + scoreOf(c.grid.split("")) + "/5 in " + WL.fmtTime(c.time * 1000));
+    $("today-meta").hidden = !meta.length;
+    $("today-meta").innerHTML = meta.join("<br>");
+  }
+  function renderWeekCard() {
+    var k = WL.buildWeek(WEEK), a = S.arc;
+    $("week-title").textContent = k.title;
+    var slots = "";
+    for (var i = 0; i < 7; i++) {
+      var d = weekDay(i), cls, label;
+      if (i === 6) {
+        cls = a.done ? (a.correct ? "got" : "miss") : WDAY === 6 ? "now star" : "star";
+        label = "Sunday: the mastermind" + (a.done ? (a.correct ? ", caught" : ", escaped") : WDAY === 6 ? ", open now" : "");
+        slots += '<li class="' + cls + '" aria-label="' + label + '"><span>★</span><b>Sun</b></li>';
+        continue;
+      }
+      var open = clueOpen(i);
+      cls = open ? "got" : d < TODAY ? "miss" : d === TODAY ? "now" : "";
+      label = DAY_NAMES[i] + ": " + (open ? "clue found" : d < TODAY ? "clue missed" : d === TODAY ? "today" : "coming");
+      slots += '<li class="' + cls + '" aria-label="' + label + '"><span>' + (open ? "✓" : d < TODAY ? "✕" : "") + "</span><b>" + DAY_NAMES[i].slice(0, 3) + "</b></li>";
+    }
+    $("week-slots").innerHTML = slots;
+    var n = cluesOpen(), sub;
+    if (a.done) sub = a.correct ? "You caught the mastermind. A new case starts Monday." : "The mastermind got away this time. A new case starts Monday.";
+    else if (WDAY === 6) sub = "<strong>Name the mastermind today!</strong> You have " + n + " of 6 clues.";
+    else sub = n + " of 6 clues. Each Daily you finish adds one. Name the mastermind on Sunday.";
+    $("week-sub").innerHTML = sub;
+    $("week-left").textContent = WDAY === 6 ? "Last day" : (7 - WDAY) + " days left";
+    $("btn-week").className = "btn wide " + (WDAY === 6 && !a.done ? "danger" : "ghost");
+    $("btn-week").textContent = WDAY === 6 && !a.done ? "Name the mastermind" : "Open the case board";
+  }
+  function msToNight() { var n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate(), WL.NIGHT_HOUR) - n; }
+  function nightState() {
+    if (S.night.day === TODAY && S.night.done) return S.night.correct ? "solved" : "missed";
+    return msToNight() <= 0 ? "open" : "wait";
+  }
+  function renderNightTile() {
+    var st = nightState(), left = msToNight(), sub;
+    if (st === "solved") sub = "Solved! Next one tomorrow at 8 PM";
+    else if (st === "missed") sub = "Not this time. Next one tomorrow at 8 PM";
+    else if (st === "open") sub = "Open now. A hard bonus case";
+    else sub = "Opens at 8 PM · in " + Math.floor(left / 3600000) + "h " + Math.floor((left % 3600000) / 60000) + "m";
+    $("night-sub").textContent = sub;
+    $("night-flag").hidden = st !== "open";
+    $("tile-night").classList.toggle("is-open", st === "open");
+  }
+  // One banner at a time: install the app, then the daily reminder.
+  function renderBanner() {
+    var b = $("hq-banner"), html = "";
+    if (web() && S.tot.dailyDone >= 1 && !S.pwa.noInstall && canInstall()) {
+      html = '<span class="hb-ico" aria-hidden="true">📲</span><span class="hb-txt"><b>Play from your home screen</b><span>One tap to open, works offline.</span></span>' +
+        '<button class="btn small primary" type="button" data-banner="install">Install</button><button class="icon-btn" type="button" data-banner="x-install" aria-label="Not now"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+    } else if (web() && S.tot.dailyDone >= 2 && !S.pwa.reminder && !S.pwa.noReminder) {
+      html = '<span class="hb-ico" aria-hidden="true">⏰</span><span class="hb-txt"><b>Never miss a case</b><span>Add a daily reminder to your calendar.</span></span>' +
+        '<button class="btn small primary" type="button" data-banner="reminder">Remind me</button><button class="icon-btn" type="button" data-banner="x-reminder" aria-label="Not now"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+    }
+    b.innerHTML = html; b.hidden = !html;
   }
   function chapterNodes(ch, clickable) {
     var h = "", cur = S.career.level;
@@ -321,10 +427,67 @@
     if (run && run.prog) { run.prog.elapsed = run.elapsed; persist(); }
     if (run && run.kind === "rush" && !run.over) { run.over = true; P.rushEnd(run.score); persist(); }
     run = null;
-    try { if (location.hash) history.replaceState(null, "", location.pathname + location.search); } catch (e) { /* ignore */ }
+    try {
+      var q = location.search.replace(/([?&])(c|g|day)=[^&]*&?/g, "$1").replace(/[?&]$/, "");
+      if (location.hash || q !== location.search) history.replaceState(null, "", location.pathname + q);
+    } catch (e) { /* ignore */ }
+    applyTheme();
     renderHQ();
     show("hq");
-    setTimeout(maybeLogin, 350);
+    setTimeout(pumpNotices, 350);
+  }
+
+  /* ---------- notices: one message at a time on HQ ----------
+     n = { icon, eyebrow, title, text, html, yes: "label", onYes, no: "label", onNo } */
+  var noticeNow = null;
+  function notice(n) { notices.push(n); if (screen === "hq") setTimeout(pumpNotices, 50); }
+  function pumpNotices() {
+    if (screen !== "hq" || document.querySelector("dialog[open]")) return;
+    var n = notices.shift();
+    if (!n) { maybeLogin(); return; }
+    showNotice(n);
+  }
+  function showNotice(n) {
+    noticeNow = n;
+    $("notice-icon").textContent = n.icon || "";
+    $("notice-eyebrow").hidden = !n.eyebrow; $("notice-eyebrow").textContent = n.eyebrow || "";
+    $("notice-h").textContent = n.title;
+    $("notice-text").innerHTML = n.text || "";
+    $("notice-body").innerHTML = n.html || "";
+    $("notice-yes").textContent = n.yes || "OK";
+    $("notice-no").hidden = !n.no; $("notice-no").textContent = n.no || "";
+    if (n.sound) Snd.play(n.sound);
+    openDialog("dlg-notice");
+  }
+  function closeNotice(yes) {
+    var n = noticeNow; noticeNow = null;
+    closeDialog("dlg-notice");
+    if (n && yes && n.onYes) n.onYes();
+    if (n && !yes && n.onNo) n.onNo();
+    setTimeout(pumpNotices, 250); // don't wait for the "close" event: hidden tabs may not fire it
+  }
+  $("notice-yes").addEventListener("click", function () { Snd.play("click"); closeNotice(true); });
+  $("notice-no").addEventListener("click", function () { Snd.play("click"); closeNotice(false); });
+  // Esc or a tap outside just dismisses the notice.
+  $("dlg-notice").addEventListener("close", function () { noticeNow = null; setTimeout(pumpNotices, 250); });
+  function rewardList(r) {
+    var li = [];
+    if (r.coins) li.push("<li>" + COIN_SVG + " " + r.coins + " coins</li>");
+    if (r.magnifier) li.push("<li>🔍 " + r.magnifier + " Magnifier" + (r.magnifier > 1 ? "s" : "") + "</li>");
+    if (r.key) li.push("<li>🔑 " + r.key + " Case Key" + (r.key > 1 ? "s" : "") + "</li>");
+    if (r.shield) li.push("<li>🛡️ " + r.shield + " Streak Shield" + (r.shield > 1 ? "s" : "") + "</li>");
+    if (r.freeze) li.push("<li>❄ " + r.freeze + " Time Freeze</li>");
+    return '<ul class="reward-list">' + li.join("") + "</ul>";
+  }
+  function streakInfo() {
+    var st = dailyStreak(), sh = S.inv.shield || 0;
+    notice({
+      icon: "🔥", title: st ? st + "-day streak" : "Start a streak",
+      text: (st ? "You've played the Daily Case " + st + " day" + (st > 1 ? "s" : "") + " in a row. " : "Play the Daily Case every day to build a streak. ") +
+        "Every 7 days in a row you get a Case Key and a Streak Shield.",
+      html: '<p class="shield-line"><b>🛡️ Streak Shields: ' + sh + " of " + P.MAX_SHIELDS + "</b><br>If you miss a day, a shield saves your streak automatically.</p>",
+      yes: "Got it", no: sh < P.MAX_SHIELDS ? "Get a shield in the Shop" : "", onNo: function () { openShop(false); }
+    });
   }
 
   /* ---------- login calendar ---------- */
@@ -339,6 +502,7 @@
       var parts = [COIN_SVG + rew.coins];
       if (rew.magnifier) parts.push(rew.magnifier + " 🔍");
       if (rew.freeze) parts.push(rew.freeze + " ❄");
+      if (rew.key) parts.push(rew.key + " 🔑");
       return '<li class="' + (i + 1 < day ? "past" : i + 1 === day ? "today" : "") + '"><b>' + (i + 1) + "</b>" + parts.join("<br>") + "</li>";
     }).join("");
     var dbl = $("btn-login-double");
@@ -352,7 +516,7 @@
     if (!r) return;
     persist();
     Snd.play("coin");
-    toast("Daily reward: " + r.coins + " coins" + (r.magnifier ? " + " + r.magnifier + " Magnifier" + (r.magnifier > 1 ? "s" : "") : "") + (r.freeze ? " + a Time Freeze" : ""), "gold");
+    toast("Daily reward: " + r.coins + " coins" + (r.magnifier ? " + " + r.magnifier + " Magnifier" + (r.magnifier > 1 ? "s" : "") : "") + (r.freeze ? " + a Time Freeze" : "") + (r.key ? " + a Case Key" : ""), "gold");
     renderCoins(true); renderHQ();
   }
   $("btn-login-claim").addEventListener("click", function () { claimLogin(false); });
@@ -388,6 +552,8 @@
       } else if (run.kind === "career") {
         $("rec-time").textContent = WL.fmtTime(run.caseElapsed);
         renderStarsLive();
+      } else if (run.kind === "night") {
+        $("rec-time").textContent = WL.fmtTime(run.caseElapsed);
       } else {
         run.elapsed += dt; clock.sinceSave += dt;
         $("rec-time").textContent = WL.fmtTime(run.elapsed);
@@ -416,20 +582,35 @@
     show("case");
     loadCase();
   }
-  function progressFor(day) {
+  function newProg(day) { return { day: day, results: [], hints: [], elapsed: 0, done: false }; }
+  function progressFor(day, catchup) {
+    if (catchup) { if (!S.catchups[day]) { S.catchups[day] = newProg(day); persist(); } return S.catchups[day]; }
     var key = day === TODAY ? "daily" : "replay";
     var p = S[key];
-    if (!p || p.day !== day) { p = S[key] = { day: day, results: [], hints: [], elapsed: 0, done: false }; persist(); }
+    if (!p || p.day !== day) { p = S[key] = newProg(day); persist(); }
     return p;
   }
-  function startDaily(day) {
+  // mode: "practice" plays a past day for fun (no rewards), even if it was unlocked with a key.
+  function startDaily(day, mode) {
     day = day || TODAY;
     var replay = day !== TODAY;
-    var prog = progressFor(day);
-    if (prog.done) { showDailyResults(day, prog, replay); return; }
-    run = { kind: replay ? "replay" : "daily", day: day, cases: WL.buildDay(day), prog: prog, idx: prog.results.length, elapsed: prog.elapsed || 0 };
+    var catchup = replay && mode !== "practice" && !!S.unlocked[day];
+    var prog = progressFor(day, catchup);
+    if (prog.done) { showDailyResults(day, prog, replay, null, catchup); return; }
+    run = { kind: replay ? "replay" : "daily", catchup: catchup, day: day, cases: WL.buildDay(day), prog: prog, idx: prog.results.length, elapsed: prog.elapsed || 0 };
     run.c = run.cases[run.idx];
     WL.track(replay ? "replay_start" : "daily_start", { day: day, case: run.idx + 1 });
+    show("case");
+    loadCase();
+  }
+  function startNight() {
+    var st = nightState();
+    if (st === "wait") { toast("The Night Shift opens at 8 PM. Come back tonight!"); return; }
+    if (st !== "open") { toast("You've done tonight's Night Shift. Next one tomorrow at 8 PM."); return; }
+    run = { kind: "night", day: TODAY, c: WL.buildNight(TODAY), elapsed: 0 };
+    S.night = { day: TODAY, done: false }; persist();
+    document.documentElement.setAttribute("data-skin", "night"); refreshTraceColors();
+    WL.track("night_start", { day: TODAY });
     show("case");
     loadCase();
   }
@@ -485,8 +666,11 @@
     } else if (run.kind === "rush") {
       setHud("Rush", "Case " + run.n);
       $("case-kicker").textContent = LEVEL[c.level] || "Case";
+    } else if (run.kind === "night") {
+      setHud("Night Shift", "Tonight's bonus case");
+      $("case-kicker").textContent = (LEVEL[c.level] || "Case") + " · One try";
     } else {
-      setHud("Daily #" + run.day + (run.kind === "replay" ? " replay" : ""), "Case " + (run.idx + 1) + " of 5");
+      setHud("Daily #" + run.day + (run.catchup ? " catch-up" : run.kind === "replay" ? " practice" : ""), "Case " + (run.idx + 1) + " of 5");
       $("case-kicker").textContent = LEVEL[c.level] || "Case";
     }
     $("case-title").textContent = c.title;
@@ -534,7 +718,8 @@
     $("pips").hidden = !(k === "daily" || k === "replay");
     $("stars-live").hidden = k !== "career";
     $("lives").hidden = k !== "rush";
-    $("replay-tag").hidden = !(k === "replay" || (k === "career" && run.n < S.career.level && !run.revealed));
+    $("replay-tag").hidden = !(k === "replay" || k === "night" || (k === "career" && run.n < S.career.level && !run.revealed));
+    $("replay-tag").textContent = k === "night" ? "Night Shift" : run.catchup ? "Catch-up" : k === "replay" ? "Practice" : "Replay";
     var combo = k === "career" ? S.career.combo : k === "rush" ? run.combo : 0;
     $("combo").hidden = combo < 2;
     $("combo").innerHTML = FLAME_SVG + "×" + combo;
@@ -546,6 +731,8 @@
     } else if (k === "career") {
       $("rec-left").textContent = "Case " + run.n;
       renderStarsLive(true);
+    } else if (k === "night") {
+      $("rec-left").textContent = "Night Shift";
     } else {
       var res = run.prog.results;
       $("pips").innerHTML = run.cases.map(function (_, i) {
@@ -596,6 +783,7 @@
     if (m === "used") note = run.hint ? "One option ruled out." : "";
     else if (m === "none") note = "Out of magnifiers. Get more in the Shop.";
     else if (run.kind === "daily" || run.kind === "replay") note = "A hint turns this case yellow.";
+    else if (run.kind === "night") note = "One try. Take your time.";
     else if (run.kind === "career" && run.wrong === 0) note = "A hint costs the 3rd star.";
     $("tool-note").textContent = note;
   }
@@ -711,6 +899,7 @@
 
     if (run.kind === "career") verdictCareer(ansEl);
     else if (run.kind === "rush") verdictRush(correct, timeout);
+    else if (run.kind === "night") verdictNight(correct);
     else verdictDaily(correct);
   }
 
@@ -770,7 +959,7 @@
   function verdictDaily(correct) {
     var c = run.c, code = correct ? (run.hint ? "y" : "g") : "r";
     run.prog.results.push(code); run.prog.hints.push(run.hint); run.prog.elapsed = run.elapsed;
-    var r = P.dailyCase({ correct: correct, hint: run.hint, twist: c.mode !== "liar", replay: run.kind === "replay" });
+    var r = P.dailyCase({ correct: correct, hint: run.hint, twist: c.mode !== "liar", replay: run.kind === "replay", catchup: run.catchup });
     persist();
     var last = run.prog.results.length >= run.cases.length;
     setVerdict({
@@ -781,6 +970,19 @@
     if (r.coins) { FX.float("+" + r.coins, $("coins"), "coin"); renderCoins(true); }
     renderMeta();
     WL.track("daily_answer", { correct: correct, level: c.level, hint: run.hint });
+  }
+  function verdictNight(correct) {
+    S.night = { day: TODAY, done: true, correct: correct };
+    var r = P.nightDone({ correct: correct, hint: run.hint, twist: run.c.mode !== "liar" });
+    persist();
+    setVerdict({
+      head: correct ? "Night Shift: solved!" : "The liar slipped away.", good: correct,
+      banner: correct ? "Bonus case cracked" : "", rewards: rw(r.coins, r.xp),
+      sub: answerLine(), next: "Back to HQ"
+    });
+    if (r.coins) { FX.float("+" + r.coins, $("coins"), "coin"); renderCoins(true); }
+    if (correct) { FX.confetti({ count: 80 }); Plat.happytime(); }
+    WL.track("night_done", { correct: correct });
   }
   function verdictRush(correct, timeout) {
     var r = null;
@@ -817,6 +1019,7 @@
       nextRush();
       return;
     }
+    if (run.kind === "night") { goHQ(); return; }
     run.idx = run.prog.results.length;
     if (run.idx >= run.cases.length) { finishDaily(); return; }
     run.c = run.cases[run.idx];
@@ -861,11 +1064,10 @@
 
   /* ---------- daily end ---------- */
   function finishDaily() {
-    var p = run.prog, day = run.day, replay = run.kind === "replay";
+    var p = run.prog, day = run.day, replay = run.kind === "replay", catchup = !!run.catchup;
     p.done = true; p.elapsed = run.elapsed;
-    var score = scoreOf(p.results);
+    var score = scoreOf(p.results), st = S.stats, extra = {};
     if (!replay) {
-      var st = S.stats;
       if (st.lastDay !== day) {
         st.played++;
         st.streak = st.lastDay === day - 1 ? st.streak + 1 : 1;
@@ -873,16 +1075,24 @@
         st.lastDay = day;
         if (score === 5) st.perfect++;
         st.dist[score] = (st.dist[score] || 0) + 1;
+        extra.streak = P.streakDay(st.streak);
       }
       S.history[day] = { score: score, grid: p.results.join(""), time: p.elapsed };
+    } else if (catchup) {
+      // A catch-up counts as playing that day, but not for the streak or the leaderboard.
+      st.played++;
+      if (score === 5) st.perfect++;
+      st.dist[score] = (st.dist[score] || 0) + 1;
+      S.history[day] = { score: score, grid: p.results.join(""), time: p.elapsed, catchup: true };
     } else if (!S.history[day]) {
       S.history[day] = { score: score, grid: p.results.join(""), time: p.elapsed, replay: true };
     }
-    var r = P.dailyDone(score, replay);
+    if ((!replay || catchup) && WL.weekOf(day) === WEEK && WL.weekday(day) < 6) extra.clue = WL.weekday(day);
+    var r = P.dailyDone(score, replay, catchup);
     persist();
-    WL.track("daily_complete", { day: day, score: score, replay: replay, seconds: Math.round(p.elapsed / 1000) });
+    WL.track("daily_complete", { day: day, score: score, replay: replay, catchup: catchup, seconds: Math.round(p.elapsed / 1000) });
     midgame("daily_done").then(function () {
-      showDailyResults(day, p, replay, r);
+      showDailyResults(day, p, replay, r, catchup, extra);
       Snd.play(score >= 3 ? "fanfare" : "fail");
       if (score === 5 && !replay) { FX.confetti({ count: 140 }); Plat.happytime(); }
     });
@@ -955,12 +1165,13 @@
     if (c) c.addEventListener("click", function () { Snd.play("click"); goHQ(); });
   }
   function focusTitle() { try { $("res-title").focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
-  function showDailyResults(day, p, replay, bonus) {
+  function showDailyResults(day, p, replay, bonus, catchup, extra) {
     stopClock();
     show("results");
-    setHud("Daily #" + day, replay ? "Replay" : "Results");
+    var label = catchup ? " catch-up" : replay ? " practice" : "";
+    setHud("Daily #" + day, catchup ? "Catch-up" : replay ? "Practice" : "Results");
     var score = scoreOf(p.results), hints = p.results.filter(function (r) { return r === "y"; }).length;
-    $("res-kicker").textContent = "Daily #" + day + (replay ? " replay" : "") + " complete";
+    $("res-kicker").textContent = "Daily #" + day + label + " complete";
     $("res-title").textContent = DAILY_TITLES[score];
     $("res-body").innerHTML = '<div class="res-grid" role="img" aria-label="' + score + ' of 5 caught">' + cells(p.results, 5) + "</div>" +
       '<p class="res-line">You caught <strong>' + score + " of 5</strong> liars in <strong>" + WL.fmtTime(p.elapsed) + "</strong>" +
@@ -970,10 +1181,20 @@
     var known = !replay && day === TODAY ? S.lb.ranks[day] : 0;
     setShare(dailyShareText(day, p, replay, known));
     rankCard("");
-    if (!replay && day === TODAY && LB.enabled() && Plat.allowExternal()) {
+    renderVersus(day, p);
+    renderExtras(day, replay, catchup, extra || {});
+    if (!replay && day === TODAY && lbOn()) {
       var onRank = function (rank) { setShare(dailyShareText(day, p, false, rank)); };
       if (S.settings.playerName) postDaily(day, p, onRank);
-      else joinCard("See where you rank against other detectives today.", function () { postDaily(day, p, onRank); postEndless(); });
+      else {
+        joinCard("See where you rank against other detectives today.", function () { postDaily(day, p, onRank); postEndless(); });
+        LB.dailyStanding(day, score, p.elapsed).then(function (st) {
+          S.lb.stand = { day: day, rank: st.rank, total: st.total }; persist();
+          var h = $("res-rank").querySelector(".rank-head");
+          if (h) h.innerHTML = "You'd be <strong>#" + st.rank + "</strong> of " + st.total + " today: " + pctText(st) + ". Join to put your name up.";
+          setShare(dailyShareText(day, p, false, 0));
+        }).catch(function () { /* the join card still works */ });
+      }
     }
     var st = S.stats;
     $("res-stats").innerHTML = statsRow([["Days played", st.played], ["Streak", dailyStreak()], ["Best streak", st.maxStreak], ["Perfect days", st.perfect]]);
@@ -983,8 +1204,8 @@
     acts.appendChild(actionBtn("Continue career: case " + S.career.level, "primary", function () { startCareer(); }));
     acts.appendChild(actionBtn("Play Rush", "ghost", startRush));
     if (replay) {
-      acts.appendChild(actionBtn("Play this day again", "ghost", function () { S.replay = null; persist(); startDaily(day); }));
-      if (Plat.allowExternal()) acts.appendChild(actionBtn("Back to past cases", "ghost", null, "archive.html#day-" + day));
+      acts.appendChild(actionBtn("Practice this day again", "ghost", function () { S.replay = null; persist(); startDaily(day, "practice"); }));
+      acts.appendChild(actionBtn("Back to case files", "ghost", openFiles));
     }
     var cases = WL.buildDay(day);
     $("review").hidden = false; $("review").open = false;
@@ -1038,13 +1259,21 @@
 
   /* ---------- sharing ---------- */
   var shareTextNow = "";
+  function pctText(st) {
+    if (st.total <= 1) return "you're the first to finish";
+    return "better than " + Math.round(100 * (st.total - st.rank) / (st.total - 1)) + "% of players";
+  }
+  // Every shared Daily result is also a challenge: the link carries your score.
+  function challengeCode(day, p) { return day + "." + p.results.join("") + "." + Math.round(p.elapsed / 1000) + "." + (myName() || "A friend"); }
   function dailyShareText(day, p, replay, rank) {
     var grid = p.results.map(function (r) { return GRID[r]; }).join("");
     var lines = [(CFG.siteName || "Who's Lying?") + " #" + day + (replay ? " (replay)" : ""), grid + " " + scoreOf(p.results) + "/5  ⏱️ " + WL.fmtTime(p.elapsed)];
-    var st = dailyStreak();
+    var st = dailyStreak(), stand = !replay && S.lb.stand && S.lb.stand.day === day ? S.lb.stand : null;
     if (!replay && st > 1) lines.push("🔥 " + st + "-day streak");
-    if (!replay && rank) lines.push("🏆 #" + rank + " on today's leaderboard");
-    var u = Plat.shareLink({ day: day }); if (u) lines.push(u);
+    if (stand && stand.total >= 10) lines.push("🕵️ Top " + Math.max(1, Math.ceil((100 * stand.rank) / stand.total)) + "% today");
+    else if (!replay && rank) lines.push("🏆 #" + rank + " on today's leaderboard");
+    lines.push("Can you beat me? ⚔️");
+    var u = Plat.shareLink({ day: day, c: challengeCode(day, p) }); if (u) lines.push(u);
     return lines.join("\n");
   }
   function rushShareText(score) {
@@ -1061,16 +1290,16 @@
     $("share-text").hidden = true;
     $("btn-share").textContent = Plat.allowExternal() ? "Share your result" : "Copy your result";
   }
-  function share() {
-    WL.track("share", { method: "button" });
-    if (Plat.allowExternal() && coarse && navigator.share) {
-      navigator.share({ text: shareTextNow }).catch(function (e) { if (!e || e.name !== "AbortError") copy(); });
+  function share() { WL.track("share", { method: "button" }); shareOut(shareTextNow); }
+  function shareOut(text) {
+    if (web() && coarse && navigator.share) {
+      navigator.share({ text: text }).catch(function (e) { if (!e || e.name !== "AbortError") copyText(text); });
       return;
     }
-    copy();
+    copyText(text);
   }
-  function copy() {
-    var text = shareTextNow;
+  function copy() { copyText(shareTextNow); }
+  function copyText(text) {
     var ok = function () { toast("Copied. Paste it to a friend."); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, function () { fallbackCopy(text); });
     else fallbackCopy(text);
@@ -1265,7 +1494,7 @@
   document.addEventListener("scroll", placeCoach, true);
 
   /* ---------- web leaderboard (Firebase) ---------- */
-  var nameCb = null, boardTab = "today";
+  var nameCb = null, boardTab = "today", boardDay = "today", boardTok = 0;
   function bestBadge() {
     var order = (LB.TIERS || []).map(function (t) { return t.icon; }), best = "", bi = 99;
     S.lb.badges.forEach(function (b) { var i = order.indexOf(b.icon); if (i >= 0 && i < bi) { bi = i; best = b.icon; } });
@@ -1291,19 +1520,25 @@
     rankCard('<p class="rank-sub">Checking the leaderboard...</p>');
     var entry = { name: S.settings.playerName, badge: bestBadge(), day: day, score: scoreOf(p.results), timeMs: p.elapsed, grid: p.results.join("") };
     var step = S.lb.posted[day] ? Promise.resolve(true) : LB.submitDaily(entry);
-    step.then(function () { S.lb.posted[day] = 1; persist(); return LB.topDaily(day); }).then(function (rows) {
-      var rank = rankOf(rows);
+    step.then(function () {
+      S.lb.posted[day] = 1; persist();
+      syncLeague();
+      return Promise.all([LB.topDaily(day), LB.dailyStanding(day, entry.score, entry.timeMs).catch(function () { return null; })]);
+    }).then(function (res) {
+      var rank = rankOf(res[0]), stand = res[1];
+      if (stand) S.lb.stand = { day: day, rank: stand.rank, total: stand.total };
       S.lb.ranks[day] = rank; persist();
-      showRankCard(rank);
+      showRankCard(rank, stand);
       if (onRank) onRank(rank);
     }).catch(function (e) {
       rankCard('<p class="rank-sub">' + esc(LB.friendlyError(e)) + '</p><button class="btn ghost wide" type="button" id="rank-retry">Try again</button>');
       $("rank-retry").addEventListener("click", function () { postDaily(day, p, onRank); });
     });
   }
-  function showRankCard(rank) {
+  function showRankCard(rank, stand) {
     var tier = rank ? LB.tierFor(rank) : null;
-    var head = rank ? "You're <strong>#" + rank + "</strong> on today's leaderboard so far." : "You're not in today's top 100 yet.";
+    var head = stand ? "You're <strong>#" + stand.rank + "</strong> of " + stand.total + " detectives today: " + pctText(stand) + "."
+      : rank ? "You're <strong>#" + rank + "</strong> on today's leaderboard so far." : "You're not in today's top 100 yet.";
     var sub = rank ? "Ranks lock in once the day ends everywhere. Hold your spot to win " + (tier ? tier.icon + " " + tier.name : "a badge") + " and a free Magnifier."
       : "Catch more liars, or catch them faster, to climb. The top 100 each day win a badge and a free Magnifier.";
     rankCard('<p class="rank-head">' + head + '</p><p class="rank-sub">' + sub + '</p><button class="btn ghost wide" type="button" id="rank-view">View leaderboard</button>');
@@ -1334,14 +1569,20 @@
   }
   function loadBoard() {
     [].forEach.call(document.querySelectorAll("#dlg-board .tab"), function (t) { t.setAttribute("aria-selected", t.dataset.tab === boardTab ? "true" : "false"); });
-    var list = $("board-list"), tab = boardTab, day = tab === "yesterday" ? TODAY - 1 : TODAY;
+    [].forEach.call(document.querySelectorAll("#board-seg button"), function (b) { b.setAttribute("aria-pressed", b.dataset.day === boardDay ? "true" : "false"); });
+    $("board-seg").hidden = boardTab !== "today";
+    $("board-head").hidden = true;
+    var tok = ++boardTok;
+    if (boardTab === "league") { loadLeague(tok); return; }
+    if (boardTab === "friends") { loadFriends(tok); return; }
+    var list = $("board-list"), tab = boardTab === "today" ? boardDay : boardTab, day = tab === "yesterday" ? TODAY - 1 : TODAY;
     $("board-note").textContent = tab === "endless" ? "The longest Rush runs of all time."
       : tab === "today" ? "Daily #" + TODAY + ". Ranks lock in once the day ends everywhere. The top 100 win a badge."
       : "Daily #" + day + ". Final ranks. The top 100 won a badge and a free Magnifier.";
     if (tab === "yesterday" && day < 1) { list.innerHTML = '<li class="board-empty">No yesterday yet. Daily #1 is today.</li>'; renderBoardMe(null); return; }
     list.innerHTML = '<li class="board-empty">Loading...</li>';
     (tab === "endless" ? LB.topEndless() : LB.topDaily(day)).then(function (rows) {
-      if (tab !== boardTab) return;
+      if (tok !== boardTok) return;
       var me = LB.myId();
       list.innerHTML = rows.length ? rows.map(function (r, i) {
         var mine = r.uid === me;
@@ -1350,7 +1591,7 @@
           (tab === "endless" ? '<span class="b-score">' + r.best + "</span>" : '<span class="b-score">' + r.score + '/5</span><span class="b-time">' + WL.fmtTime(r.timeMs) + "</span>") + "</li>";
       }).join("") : '<li class="board-empty">No scores yet. Be the first!</li>';
       renderBoardMe(rows);
-    }).catch(function (e) { if (tab === boardTab) list.innerHTML = '<li class="board-empty">' + esc(LB.friendlyError(e)) + "</li>"; });
+    }).catch(function (e) { if (tok === boardTok) list.innerHTML = '<li class="board-empty">' + esc(LB.friendlyError(e)) + "</li>"; });
   }
   function renderBoardMe(rows) {
     var box = $("board-me");
@@ -1392,7 +1633,8 @@
     openDialog("dlg-reward");
   }
   if ($("dlg-board")) {
-    [].forEach.call(document.querySelectorAll("#dlg-board .tab"), function (t) { t.addEventListener("click", function () { boardTab = t.dataset.tab; loadBoard(); }); });
+    [].forEach.call(document.querySelectorAll("#dlg-board .tab"), function (t) { t.addEventListener("click", function () { Snd.play("click"); boardTab = t.dataset.tab; loadBoard(); }); });
+    $("board-seg").addEventListener("click", function (e) { var b = e.target.closest("[data-day]"); if (b) { boardDay = b.dataset.day; loadBoard(); } });
     $("name-form").addEventListener("submit", function (e) {
       e.preventDefault();
       var r = LB.cleanName($("name-input").value);
@@ -1408,13 +1650,587 @@
     });
   }
 
+  /* ---------- friend challenges (head to head) ---------- */
+  // Link format: day.grid.seconds.name  e.g. 6.ggyrg.92.Raj
+  function parseChallenge(raw) {
+    if (!raw) return null;
+    var p = String(raw).split(".");
+    if (p.length < 4) return null;
+    var day = parseInt(p[0], 10), grid = p[1], time = parseInt(p[2], 10);
+    var name = p.slice(3).join(".").replace(/\s+/g, " ").trim().slice(0, 16);
+    if (!(day >= 1 && day <= TODAY + 1) || !/^[gyr]{5}$/.test(grid) || !(time >= 0 && time < 86400) || !name) return null;
+    return { day: day, grid: grid, time: time, name: name };
+  }
+  function versus(mine, c) {
+    var me = { s: scoreOf(mine.grid.split("")), t: mine.time }, them = { s: scoreOf(c.grid.split("")), t: c.time };
+    var tie = me.s === them.s && me.t === them.t, win = !tie && (me.s > them.s || (me.s === them.s && me.t < them.t));
+    var side = function (who, grid, o, won) {
+      return '<span class="vs-side' + (won ? " win" : "") + '"><b>' + esc(who) + '</b><span class="res-grid small">' + cells(grid.split(""), 5) +
+        "</span><span>" + o.s + "/5 · " + WL.fmtTime(o.t * 1000) + "</span></span>";
+    };
+    return {
+      win: win, tie: tie,
+      head: tie ? "It's a tie!" : win ? "You beat " + c.name + "!" : c.name + " wins this one.",
+      html: '<div class="vs-row">' + side("You", mine.grid, me, win) + '<span class="vs-x">vs</span>' + side(c.name, c.grid, them, !win && !tie) + "</div>"
+    };
+  }
+  function countWin(v, c) { if (v.win && !c.counted) { c.counted = true; P.count("challengesWon"); persist(); } }
+  function renderVersus(day, p) {
+    var c = S.challenge, box = $("res-versus");
+    if (!c || c.day !== day) { box.hidden = true; return; }
+    var v = versus({ grid: p.results.join(""), time: Math.round(p.elapsed / 1000) }, c);
+    box.innerHTML = '<p class="vs-head">' + esc(v.head) + "</p>" + v.html +
+      '<button class="btn primary wide" type="button" id="vs-rematch">' + (v.win ? "Rub it in: send your result" : "Send a rematch") + "</button>";
+    box.classList.toggle("won", v.win);
+    box.hidden = false;
+    $("vs-rematch").addEventListener("click", function () { Snd.play("click"); share(); });
+    countWin(v, c);
+    if (v.win) Snd.play("achieve", { delay: 0.8 });
+  }
+  function handleChallenge(c) {
+    var mineToday = S.daily && S.daily.day === TODAY && S.daily.done ? S.daily : null;
+    var h = c.day === TODAY ? (mineToday ? { grid: mineToday.results.join(""), time: Math.round(mineToday.elapsed / 1000) } : null)
+      : S.history[c.day] ? { grid: S.history[c.day].grid, time: Math.round(S.history[c.day].time / 1000) } : null;
+    if (h && h.grid === c.grid && h.time === c.time) return; // your own link
+    if (c.day > TODAY) {
+      notice({ icon: "⚔️", title: c.name + " challenged you!", text: "Their Daily #" + c.day + " starts tomorrow where you live. Come back then to take them on.", yes: "OK" });
+      return;
+    }
+    S.challenge = c; persist();
+    if (h) {
+      var v = versus(h, c);
+      countWin(v, c);
+      notice({ icon: v.win ? "🏆" : "⚔️", eyebrow: "Daily #" + c.day + " challenge", title: v.head, html: v.html, yes: "Send a rematch", no: "Close",
+        onYes: function () { shareOut(dailyShareText(c.day, { results: h.grid.split(""), elapsed: h.time * 1000 }, false, 0)); } });
+      return;
+    }
+    notice({
+      icon: "⚔️", eyebrow: "Daily #" + c.day + " challenge", title: c.name + " challenged you!",
+      text: "They caught <b>" + scoreOf(c.grid.split("")) + " of 5</b> liars in <b>" + WL.fmtTime(c.time * 1000) + "</b>. Same cases, one try each. Can you beat that?",
+      html: '<div class="res-grid small">' + cells(c.grid.split(""), 5) + "</div>",
+      yes: "Accept the challenge", no: "Later",
+      onYes: function () { startDaily(c.day, c.day === TODAY ? undefined : "practice"); }
+    });
+  }
+
+  /* ---------- what's next after a Daily ---------- */
+  function nextCard(icon, title, text, btn) {
+    return '<div class="next-card"><span class="nc-ico" aria-hidden="true">' + icon + '</span><span class="nc-txt"><b>' + title + "</b><span>" + text + "</span></span>" +
+      (btn ? '<button class="btn small primary" type="button" data-next="' + btn[0] + '">' + btn[1] + "</button>" : "") + "</div>";
+  }
+  function renderExtras(day, replay, catchup, extra) {
+    var h = [];
+    if (extra.streak) h.push(nextCard("🔥", dailyStreak() + " days in a row!", "You earned a Case Key and a Streak Shield.", null));
+    if (extra.clue != null) {
+      h.push(nextCard("🧩", "New clue for " + esc(WL.buildWeek(WEEK).title), esc(WL.buildWeek(WEEK).clues[extra.clue].text), ["week", "Case board"]));
+    }
+    if (!replay && day === TODAY && WDAY === 6 && !S.arc.done) {
+      h.push(nextCard("★", "Name the mastermind today", "You have " + cluesOpen() + " of 6 clues for " + esc(WL.buildWeek(WEEK).title) + ".", ["week", "Solve it"]));
+    }
+    if (!replay && day === TODAY) {
+      var ns = nightState();
+      if (ns === "open") h.push(nextCard("🌙", "The Night Shift is open", "One hard bonus case, 40 coins if you crack it.", ["night", "Play"]));
+      else if (ns === "wait") h.push(nextCard("🌙", "Night Shift at 8 PM", "Come back tonight for a hard bonus case.", null));
+    }
+    if (!replay && day === TODAY && web() && !S.pwa.reminder && !S.pwa.noReminder) h.push(nextCard("⏰", "Never miss a case", "Add a daily reminder to your calendar.", ["reminder", "Remind me"]));
+    $("res-extra").innerHTML = h.join("");
+  }
+  $("res-extra").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-next]");
+    if (!b) return;
+    Snd.play("click");
+    var k = b.dataset.next;
+    if (k === "week") openWeek(); else if (k === "night") startNight(); else if (k === "reminder") openReminder();
+  });
+
+  /* ---------- weekly league (web) ---------- */
+  var leagueP = null;
+  function weekLeft() { return WDAY === 6 ? "ends tonight" : (7 - WDAY) + " days left"; }
+  // Works out this week's tier from last week's final standing (once a week), cached per session.
+  function resolveLeague() {
+    if (!lbOn() || !S.settings.playerName) return Promise.resolve(null);
+    if (leagueP) return leagueP;
+    var L = S.league;
+    leagueP = Promise.all([LB.leagueMine(WEEK), WEEK > 1 ? LB.leagueMine(WEEK - 1) : Promise.resolve(null)]).then(function (r) {
+      var mine = r[0], prev = r[1];
+      var lastP = !prev ? Promise.resolve(null)
+        : L.last && L.last.week === WEEK - 1 ? Promise.resolve(L.last)
+        : LB.leagueStanding(WEEK - 1, prev.tier, prev.pts, prev.timeMs).then(function (st) {
+          return { week: WEEK - 1, tier: prev.tier, rank: st.rank, total: st.total, pts: prev.pts, move: LB.leagueMove(prev.tier, st.rank, st.total, prev.pts) };
+        });
+      return lastP.then(function (last) {
+        var tier = mine ? mine.tier : last ? Math.max(0, Math.min(LB.LEAGUES.length - 1, last.tier + last.move)) : 0;
+        S.league = { week: WEEK, tier: tier, entered: !!mine, pts: mine ? mine.pts : 0, timeMs: mine ? mine.timeMs : 0, days: mine ? mine.days : 0,
+          rank: L.week === WEEK ? L.rank : 0, total: L.week === WEEK ? L.total : 0, last: last, told: L.told || 0 };
+        if (last && S.league.told !== last.week) {
+          S.league.told = last.week;
+          if (last.move > 0) P.count("promotions");
+          leagueNotice(last);
+        }
+        persist();
+        return S.league;
+      });
+    });
+    leagueP.catch(function () { leagueP = null; });
+    return leagueP;
+  }
+  function leagueNotice(last) {
+    var from = LB.LEAGUES[last.tier], to = LB.LEAGUES[Math.max(0, Math.min(LB.LEAGUES.length - 1, last.tier + last.move))];
+    var place = "You finished <b>#" + last.rank + " of " + last.total + "</b> in the " + from.name + " League last week.";
+    notice(last.move > 0 ? { icon: to.icon, eyebrow: "Weekly league", title: "Promoted to " + to.name + "!", text: place + " Welcome to the big leagues.", yes: "Let's go", sound: "levelup" }
+      : last.move < 0 ? { icon: to.icon, eyebrow: "Weekly league", title: "Down to " + to.name, text: place + " Play every Daily this week to climb back up.", yes: "Challenge accepted" }
+      : { icon: to.icon, eyebrow: "Weekly league", title: "You stay in " + to.name, text: place + " Finish in the top 20% to move up.", yes: "OK" });
+  }
+  function syncLeague() {
+    if (!lbOn() || !S.settings.playerName) return;
+    resolveLeague().then(function (L) {
+      if (!L) return null;
+      return LB.syncLeague({ name: S.settings.playerName, badge: bestBadge(), week: WEEK, tier: L.tier });
+    }).then(function (doc) {
+      if (!doc) return;
+      Object.assign(S.league, { entered: true, pts: doc.pts, timeMs: doc.timeMs, days: doc.days });
+      persist();
+      return refreshLeague(true);
+    }).catch(function (e) { console.warn("[league]", e && e.message); });
+  }
+  function refreshLeague(force) {
+    var L = S.league;
+    if (!lbOn() || !L.entered || L.week !== WEEK || (!force && Date.now() - (L.at || 0) < 300000)) { renderLeagueCard(); return Promise.resolve(); }
+    return LB.leagueStanding(WEEK, L.tier, L.pts, L.timeMs).then(function (st) {
+      L.rank = st.rank; L.total = st.total; L.at = Date.now(); persist(); renderLeagueCard();
+    }).catch(function () { /* keep the old numbers */ });
+  }
+  function renderLeagueCard() {
+    var el = $("league-card");
+    if (!el) return;
+    el.hidden = !lbOn();
+    if (el.hidden) return;
+    var L = S.league, t = L.week === WEEK ? L.tier : 0, lg = LB.LEAGUES[t], sub;
+    $("league-emblem").className = "league-emblem t" + t;
+    $("league-emblem").textContent = lg.icon;
+    $("league-name").textContent = lg.name + " League";
+    if (!S.settings.playerName) sub = "Join the leaderboard to compete every week";
+    else if (L.week !== WEEK || !L.entered) sub = "Finish today's Daily to enter this week · " + weekLeft();
+    else sub = (L.rank ? "#" + L.rank + " of " + L.total + " · " : "") + L.pts + " caught · " + weekLeft();
+    $("league-sub").textContent = sub;
+  }
+  function loadLeague(tok) {
+    var list = $("board-list"), L = S.league, tier = L.week === WEEK ? L.tier : 0, lg = LB.LEAGUES[tier];
+    $("board-head").hidden = false;
+    $("board-head").innerHTML = '<span class="league-emblem t' + tier + '" aria-hidden="true">' + lg.icon + "</span><span><b>" + lg.name + " League</b>" +
+      '<span class="muted small">Week ' + WEEK + " · " + weekLeft() + "</span></span>";
+    $("board-note").textContent = "Points are liars caught in this week's Daily Cases. On Monday the top 20% move up a league and the bottom 20% move down.";
+    if (!S.settings.playerName) { list.innerHTML = '<li class="board-empty">Join the leaderboard to enter the weekly league.</li>'; renderBoardMe(null); return; }
+    list.innerHTML = '<li class="board-empty">Loading...</li>';
+    resolveLeague().then(function (R) {
+      tier = R ? R.tier : 0;
+      return LB.leagueTop(WEEK, tier);
+    }).then(function (rows) {
+      if (tok !== boardTok) return;
+      var me = LB.myId(), tot = Math.max(rows.length, S.league.total || 0);
+      var up = tier < LB.LEAGUES.length - 1 ? Math.max(1, Math.round(tot * 0.2)) : 0, down = tier > 0 && tot >= 5 ? Math.floor(tot * 0.2) : 0;
+      list.innerHTML = (rows.length ? rows.map(function (r, i) {
+        var zone = i < up && r.pts > 0 ? " up" : down && i >= tot - down ? " down" : "";
+        return '<li class="board-row' + zone + (r.uid === me ? " me" : "") + '"><span class="b-rank">' + (i + 1) + '</span><span class="b-name">' +
+          (r.badge ? '<span class="b-badge" aria-hidden="true">' + esc(r.badge) + "</span>" : "") + esc(r.name) + (r.uid === me ? " <em>(you)</em>" : "") +
+          '</span><span class="b-score">' + r.pts + '</span><span class="b-time">' + r.days + "/7 days</span></li>";
+      }).join("") : '<li class="board-empty">Nobody in this league has played this week yet. Finish today\'s Daily to take the lead!</li>') +
+        (!S.league.entered && rows.length ? '<li class="board-empty">You\'re not in this week\'s league yet. Finish today\'s Daily to enter.</li>' : "");
+      renderBoardMe(rows);
+    }).catch(function (e) { if (tok === boardTok) list.innerHTML = '<li class="board-empty">' + esc(LB.friendlyError(e)) + "</li>"; });
+  }
+
+  /* ---------- friend groups (web) ---------- */
+  function loadFriends(tok) {
+    var list = $("board-list"), head = $("board-head"), me = $("board-me");
+    head.hidden = false;
+    $("board-note").textContent = "";
+    if (!S.settings.playerName) {
+      head.innerHTML = "<span><b>Friend groups</b><span class=\"muted small\">Compare today's results with friends</span></span>";
+      list.innerHTML = '<li class="board-empty">Pick a detective name first, then make a group or join one with a code.</li>';
+      me.innerHTML = '<button class="btn primary wide" type="button" id="grp-name">Pick a name</button>';
+      $("grp-name").addEventListener("click", function () { askName(function () { loadBoard(); }); });
+      return;
+    }
+    if (!S.groups.length) {
+      head.innerHTML = "<span><b>Friend groups</b><span class=\"muted small\">Compare today's results with friends</span></span>";
+      list.innerHTML = '<li class="board-empty">Make a group for your friends, family or office and share the code. Everyone sees each other\'s Daily results.</li>';
+      me.innerHTML = '<button class="btn primary wide" type="button" id="grp-new">Create or join a group</button>';
+      $("grp-new").addEventListener("click", openGroupDlg);
+      return;
+    }
+    S.groupSel = Math.min(S.groupSel || 0, S.groups.length - 1);
+    var g = S.groups[S.groupSel];
+    head.innerHTML = '<div class="grp-chips">' + S.groups.map(function (x, i) {
+      return '<button type="button" class="chip-btn' + (i === S.groupSel ? " on" : "") + '" data-grp="' + i + '">' + esc(x.name) + "</button>";
+    }).join("") + '<button type="button" class="chip-btn" data-grp="new" aria-label="Create or join another group">+</button></div>';
+    $("board-note").textContent = "Daily #" + TODAY + " · group code " + g.code;
+    list.innerHTML = '<li class="board-empty">Loading...</li>';
+    me.innerHTML = '<div class="row2"><button class="btn primary" type="button" id="grp-invite">Invite friends</button><button class="btn ghost" type="button" id="grp-leave">Leave group</button></div>';
+    $("grp-invite").addEventListener("click", function () { Snd.play("click"); inviteGroup(g); });
+    $("grp-leave").addEventListener("click", function () { leaveGroup(g); });
+    LB.getGroup(g.code).then(function (grp) {
+      g.name = grp.name;
+      return LB.groupScores(grp.members, TODAY).then(function (sc) { return { grp: grp, sc: sc }; });
+    }).then(function (o) {
+      if (tok !== boardTok) return;
+      var my = LB.myId(), ids = Object.keys(o.grp.members);
+      var done = ids.filter(function (u) { return o.sc[u]; }).map(function (u) { return o.sc[u]; })
+        .sort(function (a, b) { return b.score - a.score || a.timeMs - b.timeMs; });
+      var waiting = ids.filter(function (u) { return !o.sc[u]; });
+      list.innerHTML = done.map(function (r, i) {
+        return '<li class="board-row' + (r.uid === my ? " me" : "") + '"><span class="b-rank">' + (i + 1) + '</span><span class="b-name">' + esc(r.name) +
+          (r.uid === my ? " <em>(you)</em>" : "") + '</span><span class="b-score">' + r.score + '/5</span><span class="b-time">' + WL.fmtTime(r.timeMs) + "</span></li>";
+      }).join("") + waiting.map(function (u) {
+        return '<li class="board-row waiting"><span class="b-rank">·</span><span class="b-name">' + esc(o.grp.members[u]) + (u === my ? " <em>(you)</em>" : "") +
+          '</span><span class="b-score">–</span><span class="b-time">not yet</span></li>';
+      }).join("");
+      if (ids.length < 2) list.innerHTML += '<li class="board-empty">It\'s just you so far. Tap "Invite friends" and send them the link.</li>';
+    }).catch(function (e) {
+      if (tok !== boardTok) return;
+      if (e && e.code === "not-found") { S.groups.splice(S.groupSel, 1); persist(); loadBoard(); return; }
+      list.innerHTML = '<li class="board-empty">' + esc(LB.friendlyError(e)) + "</li>";
+    });
+  }
+  function openGroupDlg() {
+    if (!S.settings.playerName) { askName(openGroupDlg); return; }
+    $("group-name").value = ""; $("group-code").value = ""; $("group-error").hidden = true;
+    openDialog("dlg-group");
+  }
+  function groupError(msg) { $("group-error").textContent = msg; $("group-error").hidden = false; }
+  function addGroup(g) {
+    var i = -1;
+    S.groups.forEach(function (x, k) { if (x.code === g.code) i = k; });
+    if (i < 0) { S.groups.push({ code: g.code, name: g.name }); i = S.groups.length - 1; }
+    S.groupSel = i; persist();
+  }
+  function groupBusy(on) { $("group-create").disabled = on; $("group-join").disabled = on; }
+  function inviteGroup(g) {
+    WL.track("group_invite", {});
+    shareOut("Join my Who's Lying? group “" + g.name + "” and let's compare our daily detective results! 🕵️\n" + Plat.shareLink({ g: g.code }) + "\nGroup code: " + g.code);
+  }
+  function leaveGroup(g) {
+    showNotice({ icon: "👋", title: "Leave " + g.name + "?", text: "You can join again later with the code " + g.code + ".", yes: "Leave", no: "Stay",
+      onYes: function () {
+        LB.leaveGroup(g.code).then(function () {
+          S.groups = S.groups.filter(function (x) { return x.code !== g.code; }); S.groupSel = 0; persist();
+          toast("You left " + esc(g.name) + "."); openBoard("friends");
+        }).catch(function (e) { toast(esc(LB.friendlyError(e))); openBoard("friends"); });
+      },
+      onNo: function () { openBoard("friends"); } });
+  }
+  function joinGroupFlow(code) {
+    if (!S.settings.playerName) { askName(function () { joinGroupFlow(code); }); return; }
+    if (S.groups.length >= 5 && !S.groups.some(function (x) { return x.code === code; })) { toast("You can be in 5 groups. Leave one first."); return; }
+    return LB.joinGroup(code, S.settings.playerName).then(function (g) {
+      addGroup({ code: code, name: g.name });
+      WL.track("group_join", {});
+      toast("You joined " + esc(g.name) + "!", "gold");
+      closeDialog("dlg-group");
+      openBoard("friends");
+    });
+  }
+  if ($("dlg-group")) {
+    $("group-create").addEventListener("click", function () {
+      var r = LB.cleanGroupName($("group-name").value);
+      if (!r.ok) return groupError(r.msg);
+      if (S.groups.length >= 5) return groupError("You can be in 5 groups. Leave one first.");
+      groupBusy(true);
+      LB.createGroup(r.name, S.settings.playerName).then(function (g) {
+        addGroup(g);
+        WL.track("group_create", {});
+        closeDialog("dlg-group");
+        toast("Group created! Code: " + g.code, "gold");
+        openBoard("friends");
+        inviteGroup(g);
+      }).catch(function (e) { groupError(LB.friendlyError(e)); }).then(function () { groupBusy(false); });
+    });
+    $("group-join").addEventListener("click", function () {
+      var code = LB.cleanCode($("group-code").value);
+      if (!code) return groupError("Group codes have 6 letters and numbers, like ABC234.");
+      groupBusy(true);
+      (joinGroupFlow(code) || Promise.resolve()).catch(function (e) { groupError(LB.friendlyError(e)); }).then(function () { groupBusy(false); });
+    });
+    $("board-head").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-grp]");
+      if (!b) return;
+      Snd.play("click");
+      if (b.dataset.grp === "new") { closeDialog("dlg-board"); openGroupDlg(); return; }
+      S.groupSel = +b.dataset.grp; persist(); loadBoard();
+    });
+  }
+  function handleGroupInvite(code) {
+    LB.getGroup(code).then(function (g) {
+      if (S.groups.some(function (x) { return x.code === code; })) { openBoard("friends"); return; }
+      var n = Object.keys(g.members).length;
+      notice({ icon: "👥", eyebrow: "Friend group", title: "Join “" + g.name + "”?", yes: "Join the group", no: "Not now",
+        text: n + " detective" + (n > 1 ? "s" : "") + " already compare their Daily results here. Join to see how you stack up every day.",
+        onYes: function () { var p = joinGroupFlow(code); if (p) p.catch(function (e) { toast(esc(LB.friendlyError(e))); }); } });
+    }).catch(function () { toast("That group link doesn't work any more."); });
+  }
+
+  /* ---------- case files: past Dailies, catch up with Case Keys ---------- */
+  var filesUntil = 1;
+  function openFiles() {
+    show("files");
+    setHud("Case files", "Every Daily so far");
+    filesUntil = Math.max(1, TODAY - 13);
+    renderFiles();
+  }
+  function renderFiles() {
+    var keys = S.inv.key || 0;
+    $("files-keys").innerHTML = '<span class="key-ico" aria-hidden="true">🔑</span><span>You have <b>' + keys + " Case Key" + (keys === 1 ? "" : "s") +
+      "</b>. A key opens a missed day with full rewards" + (WDAY < 6 ? " and its clue for the Case of the Week" : "") + ". Earn one every 7 days in a row, or buy them in the Shop.</span>";
+    var h = "";
+    for (var d = TODAY; d >= filesUntil; d--) {
+      var hist = S.history[d], played = hist && !hist.replay, today = d === TODAY, prog = today && S.daily && S.daily.day === TODAY ? S.daily : null;
+      var date = dayName(d) + ", " + WL.formatDate(WL.dateForDay(d), "short"), status, acts;
+      if (played) {
+        status = '<span class="res-grid small">' + cells(hist.grid.split(""), 5) + "</span><span>" + hist.score + "/5" + (hist.catchup ? " · catch-up" : "") + "</span>";
+        acts = today ? '<button class="btn small ghost" type="button" data-play="' + d + '">Result</button>'
+          : '<button class="btn small ghost" type="button" data-practice="' + d + '">Practice</button>';
+      } else if (today) {
+        status = prog && prog.results.length ? "Case " + (prog.results.length + 1) + " of 5" : "New today";
+        acts = '<button class="btn small danger" type="button" data-play="' + d + '">' + (prog && prog.results.length ? "Continue" : "Play") + "</button>";
+      } else if (S.unlocked[d]) {
+        status = "Unlocked";
+        acts = '<button class="btn small primary" type="button" data-play="' + d + '">Continue</button>';
+      } else {
+        status = '<span class="muted">Missed</span>';
+        acts = '<button class="btn small primary" type="button" data-unlock="' + d + '">Catch up · 🔑</button>' +
+          '<button class="link-btn" type="button" data-practice="' + d + '">Practice</button>';
+      }
+      h += '<li class="file' + (played ? " played" : today ? " today" : S.unlocked[d] ? " open" : " missed") + '"><div class="file-head"><b>Daily #' + d + "</b>" +
+        '<span class="muted small">' + date + '</span></div><div class="file-status">' + status + '</div><div class="file-acts">' + acts + "</div></li>";
+    }
+    $("files-list").innerHTML = h;
+    $("files-more").hidden = filesUntil <= 1;
+  }
+  function unlockDay(d) {
+    if ((S.inv.key || 0) < 1) {
+      showNotice({ icon: "🔑", title: "No Case Keys left", text: "You get a key every 7 days in a row, on day 7 of the login calendar, or in the Shop.", yes: "Go to the Shop", no: "Close", onYes: function () { openShop(false); } });
+      return;
+    }
+    P.useItem("key");
+    S.unlocked[d] = true; persist();
+    Snd.play("buy");
+    WL.track("catchup_unlock", { day: d, ago: TODAY - d });
+    startDaily(d);
+  }
+  $("files-list").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-play],[data-practice],[data-unlock]");
+    if (!b) return;
+    Snd.play("click");
+    if (b.dataset.unlock) unlockDay(+b.dataset.unlock);
+    else if (b.dataset.practice) { S.replay = null; persist(); startDaily(+b.dataset.practice, "practice"); }
+    else startDaily(+b.dataset.play);
+  });
+  $("files-more").addEventListener("click", function () { filesUntil = Math.max(1, filesUntil - 14); renderFiles(); });
+
+  /* ---------- Case of the Week board ---------- */
+  var accusing = false;
+  function openWeek() {
+    show("week");
+    setHud("Case of the Week", "Week " + WEEK + " · " + weekLeftText());
+    accusing = false;
+    renderWeek();
+  }
+  function weekLeftText() { return WDAY === 6 ? "last day" : (7 - WDAY) + " days left"; }
+  function renderWeek() {
+    var k = WL.buildWeek(WEEK), a = S.arc, n = cluesOpen();
+    $("wk-eyebrow").textContent = "Case of the Week · " + (a.done ? "closed" : WDAY === 6 ? "name the mastermind today" : "solve it on Sunday");
+    $("wk-title").textContent = k.title;
+    $("wk-setup").textContent = k.setup;
+    $("wk-count").textContent = n + " of 6 found";
+    $("wk-clues").innerHTML = k.clues.map(function (c, i) {
+      var d = weekDay(i), day = DAY_NAMES[i].slice(0, 3);
+      if (clueOpen(i) || a.done) return '<li class="wk-clue open"><span class="wk-day">' + day + "</span><span>" + esc(c.text) + "</span></li>";
+      var why, acts = "";
+      if (d < TODAY) {
+        why = "You missed " + DAY_NAMES[i] + "'s Daily.";
+        acts = '<button class="btn small primary" type="button" data-wk-key="' + d + '">Catch up · 🔑</button>' +
+          '<button class="btn small ghost" type="button" data-wk-buy="' + i + '">Buy ' + COIN_SVG + CLUE_COST + "</button>";
+      } else if (d === TODAY) {
+        why = "Finish today's Daily to get this clue.";
+        acts = '<button class="btn small danger" type="button" data-wk-today="1">Play today</button>';
+      } else why = "Comes with " + DAY_NAMES[i] + "'s Daily.";
+      return '<li class="wk-clue locked"><span class="wk-day">' + day + '</span><span class="wk-why">' + why + "</span>" + (acts ? '<span class="wk-acts">' + acts + "</span>" : "") + "</li>";
+    }).join("");
+    $("wk-suspects").innerHTML = k.suspects.map(function (s, i) {
+      var cls = "wk-sus" + (a.crossed[i] ? " crossed" : "") + (a.done && i === k.answer ? " culprit" : "") + (a.done && a.pick === i && !a.correct ? " wrong" : "");
+      return '<button type="button" class="' + cls + '" data-sus="' + i + '" aria-pressed="' + (a.crossed[i] ? "true" : "false") + '"' + (a.done ? " disabled" : "") + ">" +
+        '<span class="mug">' + WL.avatar(s.name) + '</span><span class="wk-who"><b>' + esc(s.name) + '</b><span class="muted small">' + esc(s.role) + "</span>" +
+        '<span class="wk-traits">' + s.traits.map(function (t) { return "<span>" + esc(t) + "</span>"; }).join("") + "</span></span>" +
+        (a.done && i === k.answer ? '<span class="stamp">' + (a.correct ? "Caught" : "Escaped") + "</span>" : "") + "</button>";
+    }).join("");
+    var st;
+    if (a.done) st = '<div class="wk-verdict ' + (a.correct ? "good" : "bad") + '"><b>' + (a.correct ? "Mastermind caught!" : "The mastermind got away.") + "</b><p>" + esc(k.why) + "</p><p class=\"muted small\">A new Case of the Week starts on Monday.</p></div>";
+    else if (WDAY === 6 && accusing) st = '<p><b>Tap the mastermind.</b> You get one try.</p><button class="btn ghost small" type="button" data-wk-cancel="1">Cancel</button>';
+    else if (WDAY === 6) st = "<p>" + (n < 6 ? "You have <b>" + n + " of 6 clues</b>. With clues missing it's a guess, so catch up or buy them first." : "You have <b>every clue</b>. Only one suspect fits them all.") +
+      '</p><button class="btn danger wide" type="button" data-wk-accuse="1">Name the mastermind</button>';
+    else st = "<p>Every Daily you finish from Monday to Saturday adds a clue. On <b>Sunday</b>, name the mastermind (one try). Tap suspects to cross them out as the clues rule them out.</p>";
+    $("wk-status").innerHTML = st;
+    $("wk-tip").textContent = a.done ? "" : accusing ? "Tap the mastermind" : "Tap a suspect to cross them out";
+    $("scr-week").classList.toggle("accusing", accusing);
+  }
+  function accuseMastermind(i) {
+    var k = WL.buildWeek(WEEK), correct = i === k.answer;
+    S.arc.done = true; S.arc.correct = correct; S.arc.pick = i;
+    var r = P.mastermindDone(correct);
+    persist();
+    accusing = false;
+    renderWeek();
+    Snd.play("stamp");
+    setTimeout(function () { Snd.play(correct ? "fanfare" : "fail"); }, 200);
+    if (correct) { FX.confetti({ count: 150 }); Plat.happytime(); }
+    FX.float("+" + r.coins, $("coins"), "coin");
+    renderCoins(true);
+    toast((correct ? "Mastermind caught! " : "Wrong suspect. ") + "+" + r.coins + " coins, +" + r.xp + " XP", correct ? "gold" : "");
+    WL.track("mastermind", { correct: correct, clues: cluesOpen() });
+    setTimeout(flushQueue, 1500);
+  }
+  $("scr-week").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-sus],[data-wk-key],[data-wk-buy],[data-wk-today],[data-wk-accuse],[data-wk-cancel]");
+    if (!b || b.disabled) return;
+    var a = S.arc;
+    if (b.dataset.sus != null) {
+      var i = +b.dataset.sus, s = WL.buildWeek(WEEK).suspects[i];
+      if (accusing) {
+        showNotice({ icon: "★", title: "Accuse " + s.name + "?", text: "You get one try. If you're wrong, the mastermind gets away.", yes: "Accuse " + s.name, no: "Not yet",
+          onYes: function () { accuseMastermind(i); } });
+        return;
+      }
+      a.crossed[i] = !a.crossed[i]; persist();
+      Snd.play("tap");
+      renderWeek();
+      return;
+    }
+    Snd.play("click");
+    if (b.dataset.wkKey) unlockDay(+b.dataset.wkKey);
+    else if (b.dataset.wkBuy) {
+      if (S.coins < CLUE_COST) { toast("You need " + (CLUE_COST - S.coins) + " more coins."); return; }
+      P.addCoins(-CLUE_COST); a.bought[+b.dataset.wkBuy] = true; persist();
+      Snd.play("buy"); renderCoins(true); renderWeek();
+    } else if (b.dataset.wkToday) startDaily(TODAY);
+    else if (b.dataset.wkAccuse) { accusing = true; renderWeek(); }
+    else if (b.dataset.wkCancel) { accusing = false; renderWeek(); }
+  });
+
+  /* ---------- daily reminder (calendar event, web) ---------- */
+  function pad2(n) { return String(n).padStart(2, "0"); }
+  function calDate(d) { return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + "T" + pad2(d.getHours()) + pad2(d.getMinutes()) + "00"; }
+  function remStart() {
+    var t = ($("rem-time").value || "09:00").split(":"), d = new Date();
+    d.setDate(d.getDate() + 1); d.setHours(+t[0] || 0, +t[1] || 0, 0, 0);
+    return d;
+  }
+  function openReminder() {
+    if (!$("dlg-reminder")) return;
+    updateRemLink();
+    openDialog("dlg-reminder");
+  }
+  function updateRemLink() {
+    var d = remStart(), end = new Date(d.getTime() + 5 * 60000), url = Plat.shareLink({}), tz = "";
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { /* ignore */ }
+    $("rem-google").href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent("🕵️ New Who's Lying? cases") +
+      "&details=" + encodeURIComponent("5 new cases are waiting. Keep your streak alive: " + url) +
+      "&dates=" + calDate(d) + "/" + calDate(end) + "&recur=" + encodeURIComponent("RRULE:FREQ=DAILY") + (tz ? "&ctz=" + encodeURIComponent(tz) : "");
+  }
+  function downloadIcs() {
+    var d = remStart(), url = Plat.shareLink({}), now = new Date();
+    var ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Who's Lying//Daily reminder//EN", "CALSCALE:GREGORIAN", "BEGIN:VEVENT",
+      "UID:whoslying-" + now.getTime() + "@whoslying", "DTSTAMP:" + now.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, ""),
+      "DTSTART:" + calDate(d), "DURATION:PT5M", "RRULE:FREQ=DAILY", "SUMMARY:🕵️ New Who's Lying? cases",
+      "DESCRIPTION:5 new cases are waiting. Keep your streak alive: " + url, "URL:" + url,
+      "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:New Who's Lying? cases", "TRIGGER:PT0M", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+    a.download = "whos-lying-reminder.ics";
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    reminderSet("ics");
+  }
+  function reminderSet(how) {
+    S.pwa.reminder = true; persist();
+    WL.track("reminder_set", { how: how });
+    closeDialog("dlg-reminder");
+    toast("Reminder added. See you tomorrow, detective!", "gold");
+    if (screen === "hq") renderBanner();
+  }
+  if ($("dlg-reminder")) {
+    $("rem-time").addEventListener("change", updateRemLink);
+    $("rem-google").addEventListener("click", function () { updateRemLink(); reminderSet("google"); });
+    $("rem-ics").addEventListener("click", downloadIcs);
+    $("btn-reminder").addEventListener("click", function () { closeDialog("dlg-settings"); openReminder(); });
+    $("btn-install").addEventListener("click", function () { closeDialog("dlg-settings"); install(); });
+  }
+
+  /* ---------- install as an app + offline (web) ---------- */
+  var installEvt = null;
+  function standalone() { return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true; }
+  function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
+  function canInstall() { return web() && !standalone() && (!!installEvt || isIOS()); }
+  function install() {
+    if (installEvt) {
+      installEvt.prompt();
+      installEvt.userChoice.then(function (c) { WL.track("install_prompt", { outcome: c && c.outcome }); installEvt = null; if (screen === "hq") renderBanner(); });
+      return;
+    }
+    if (isIOS()) showNotice({ icon: "📲", title: "Add it to your Home Screen", text: "In Safari, tap the <b>Share</b> button at the bottom of the screen, then <b>Add to Home Screen</b>.", yes: "Got it" });
+  }
+  if ($("btn-install") && isIOS() && !standalone()) $("btn-install").hidden = false;
+  if (web()) {
+    window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); installEvt = e; if ($("btn-install")) $("btn-install").hidden = false; if (screen === "hq") renderBanner(); });
+    window.addEventListener("appinstalled", function () { installEvt = null; WL.track("app_installed", {}); if (screen === "hq") renderBanner(); });
+    if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+      window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () { /* offline play is a bonus */ }); });
+    }
+  }
+  $("hq-banner").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-banner]");
+    if (!b) return;
+    Snd.play("click");
+    var k = b.dataset.banner;
+    if (k === "install") install();
+    else if (k === "reminder") openReminder();
+    else if (k === "x-install") { S.pwa.noInstall = true; persist(); renderBanner(); }
+    else if (k === "x-reminder") { S.pwa.noReminder = true; persist(); renderBanner(); }
+  });
+
+  /* ---------- start-up checks: streak shields and comeback gift ---------- */
+  function startupChecks() {
+    var away = S.lastSeen ? TODAY - S.lastSeen : 0;
+    if (away >= 3 && S.tot.solved > 0) {
+      var g = P.comeback();
+      notice({ icon: "🕵️", eyebrow: "Welcome back", title: "We missed you, detective!", sound: "fanfare",
+        text: "You've been away for " + away + " days. Here's a care package to get you back on the case:", html: rewardList(g),
+        yes: "Play today's cases", no: "Later", onYes: function () { startDaily(TODAY); } });
+      WL.track("comeback", { days: away });
+    }
+    var saved = P.coverStreak(TODAY);
+    if (saved) {
+      notice({ icon: "🛡️", title: "Streak saved!", sound: "achieve",
+        text: "You missed " + (saved.used > 1 ? saved.used + " days" : "a day") + ", so " + (saved.used > 1 ? saved.used + " Streak Shields" : "a Streak Shield") +
+          " kept your <b>" + saved.streak + "-day streak</b> alive. Play today to keep it going!",
+        yes: "Play today's cases", no: "Later", onYes: function () { startDaily(TODAY); } });
+      WL.track("shield_used", { days: saved.used });
+    }
+    S.lastSeen = TODAY;
+  }
+
   /* ---------- wiring ---------- */
   $("brand").addEventListener("click", function () { Snd.play("click"); goHQ(); });
   $("btn-home").addEventListener("click", function () { Snd.play("click"); goHQ(); });
   $("coins").addEventListener("click", function () { Snd.play("click"); if (screen === "case") return toast("Finish this case first, then open the Shop."); openShop(false); });
   $("btn-play").addEventListener("click", function () { Snd.play("click"); startCareer(); });
   $("btn-map").addEventListener("click", function () { Snd.play("click"); openMap(); });
-  $("tile-daily").addEventListener("click", function () { Snd.play("click"); startDaily(TODAY); });
+  $("btn-daily").addEventListener("click", function () { Snd.play("click"); startDaily(TODAY); });
+  $("btn-week").addEventListener("click", function () { Snd.play("click"); openWeek(); });
+  $("tile-night").addEventListener("click", function () { Snd.play("click"); startNight(); });
+  $("streak-chip").addEventListener("click", function () { Snd.play("click"); streakInfo(); });
+  $("btn-files").addEventListener("click", function () { Snd.play("click"); openFiles(); });
+  $("btn-friends").addEventListener("click", function () { Snd.play("click"); openBoard("friends"); });
+  if ($("league-card")) $("league-card").addEventListener("click", function () { Snd.play("click"); openBoard("league"); });
   $("tile-rush").addEventListener("click", function () { Snd.play("click"); startRush(); });
   $("btn-shop").addEventListener("click", function () { Snd.play("click"); openShop(false); });
   $("btn-ach").addEventListener("click", function () { Snd.play("click"); openAch(); });
@@ -1461,7 +2277,7 @@
     [].forEach.call(document.querySelectorAll("[data-countdown]"), function (el) { el.textContent = WL.fmtCountdown(left); });
     if (screen === "hq" && !run) {
       if (WL.dayNumber() !== TODAY) location.reload();
-      else if (new Date().getSeconds() === 0) renderHQ();
+      else if (new Date().getSeconds() === 0) { renderHQ(); refreshLeague(false); }
     }
     if (screen === "shop" && P.coolLeft("coinsAd", 240) === 0 && $("btn-free-coins") && $("btn-free-coins").disabled) renderShop();
   }, 1000);
@@ -1481,6 +2297,14 @@
     S.endless = Object.assign({ best: 0, runs: 0 }, S.endless || {});
     S.settings = Object.assign({ sound: true, music: true, tutorialDone: false, playerName: "" }, S.settings || {});
     S.lb = Object.assign({ posted: {}, claimed: {}, badges: [], ranks: {} }, S.lb || {});
+    S.unlocked = S.unlocked || {};   // past days opened with a Case Key
+    S.catchups = S.catchups || {};   // progress on those days
+    S.night = S.night || {};
+    if (!S.arc || S.arc.week !== WEEK) S.arc = { week: WEEK, bought: {}, crossed: {}, done: false, correct: false, pick: -1 };
+    S.league = Object.assign({ week: 0, tier: 0, entered: false }, S.league || {});
+    S.groups = S.groups || [];
+    S.pwa = S.pwa || {};
+    if (S.challenge && S.challenge.day < TODAY - 7) S.challenge = null;
     P.init(S, hooks);
     // Old saves (before career mode) skip the tutorial.
     if ((S.stats.played > 0 || S.endless.runs > 0) && !S.settings.tutorialDone) S.settings.tutorialDone = true;
@@ -1489,6 +2313,10 @@
     shownCoins = S.coins;
   }
   function route() {
+    var ch = parseChallenge(Plat.inviteParam("c"));
+    if (ch) { handleChallenge(ch); goHQ(); return; }
+    var grp = lbOn() ? LB.cleanCode(Plat.inviteParam("g")) : "";
+    if (grp) { goHQ(); handleGroupInvite(grp); return; }
     var invDay = parseInt(Plat.inviteParam("day"), 10), invMode = Plat.inviteParam("mode");
     if (invDay >= 1 && invDay <= TODAY) { startDaily(invDay); return; }
     if (invMode === "rush") { startRush(); return; }
@@ -1518,8 +2346,12 @@
     }).then(function () {
       Plat.loadingStop();
       document.body.classList.remove("booting");
+      startupChecks();
       route();
-      if (LB.enabled() && Plat.allowExternal()) setTimeout(checkRewards, 1500);
+      if (lbOn()) {
+        setTimeout(checkRewards, 1500);
+        if (S.settings.playerName) resolveLeague().then(function () { return refreshLeague(true); }).catch(function () { /* offline */ });
+      }
       persist();
     }).catch(function (e) {
       console.error(e);
@@ -1529,7 +2361,7 @@
   // Test hook for automated checks (only with ?test=1 in the address).
   if (/[?&]test=1/.test(location.search)) window.__WLtest = {
     run: function () { return run; }, state: function () { return S; }, persist: persist,
-    hq: goHQ, career: startCareer, rush: startRush, daily: startDaily
+    hq: goHQ, career: startCareer, rush: startRush, daily: startDaily, night: startNight, week: openWeek, files: openFiles
   };
   boot();
 })();

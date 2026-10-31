@@ -36,7 +36,12 @@ window.WL_CONFIG = {
     // firebase: { apiKey: "AIza...", authDomain: "your-app.firebaseapp.com", projectId: "your-app", appId: "1:123:web:abc" }
     // This key is safe to publish: the security rules in firebase/firestore.rules protect the data.
     // Until then the leaderboard stays hidden. Add ?lb=demo to the address to preview it with demo players.
-    firebase: null
+    firebase: {
+      apiKey: "AIzaSyD9pUc9EAFZn1YLbvqq2lCV8zXmNquG1MM",
+      authDomain: "whoslying-daily.firebaseapp.com",
+      projectId: "whoslying-daily",
+      appId: "1:854039661523:web:5b27a8d9d0531c6d683d26"
+    }
   },
 
   ads: {

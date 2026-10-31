@@ -723,6 +723,104 @@
     return '<svg class="face" viewBox="0 0 64 64" aria-hidden="true" focusable="false">' + p.join("") + "</svg>";
   }
 
+  /* ---------- weeks: Monday to Sunday (Daily #1 must be a Monday) ---------- */
+  function weekOf(day) { return Math.floor((day - 1) / 7) + 1; }
+  function weekday(day) { return (day - 1) % 7; } // 0 = Monday ... 6 = Sunday
+
+  /* ---------- Night Shift: one hard bonus case each evening ---------- */
+  var NIGHT_HOUR = 20;
+  function buildNight(day) {
+    var mode = ["liar", "honest", "liar", "planted"][day % 4];
+    var c = generateCase(rngFrom("wl-night-" + day), {
+      mode: mode, clueCount: mode === "liar" ? 5 : 4, maxTier: 3, needTier: mode === "liar" ? 3 : 0,
+      level: mode === "liar" ? "hard" : "twist", avoid: { names: {}, premises: {}, facts: {} }
+    });
+    return c;
+  }
+
+  /* ---------- Case of the Week ----------
+     8 suspects, 6 clues (one for each Daily from Monday to Saturday), solved on Sunday.
+     Together the clues rule out everyone but the mastermind, and every clue rules out
+     someone no other clue does, so each missed day really leaves a gap. */
+  var WEEK_CASES = [
+    { title: "The Harbor Diamond", setup: "The Star of the Harbor vanished from a locked case during the yacht club gala." },
+    { title: "The Mayor's Ledger", setup: "The mayor's secret ledger was stolen from City Hall the night before the election." },
+    { title: "The Silent Auction", setup: "A famous painting was swapped for a fake at the museum's silent auction." },
+    { title: "The Midnight Express", setup: "A briefcase full of bonds vanished from the sleeper car of the midnight train." },
+    { title: "The Stolen Stradivarius", setup: "A priceless violin disappeared from the concert hall minutes before the show." },
+    { title: "The Chocolate Formula", setup: "The secret recipe of the city's oldest chocolate factory was copied and sold." },
+    { title: "The Stadium Trophy", setup: "The championship trophy disappeared from the stadium on the eve of the final." },
+    { title: "The Royal Stamp", setup: "The rarest stamp in the world went missing from a collector's locked album." },
+    { title: "The Blackout Bank Job", setup: "During a city blackout, someone emptied a safe deposit box at Central Bank." },
+    { title: "The Last Film Reel", setup: "The only copy of a famous director's new film was stolen from the editing room." },
+    { title: "The Golden Falcon", setup: "A golden falcon statue vanished from the hotel lobby during a charity ball." },
+    { title: "The Rooftop Orchids", setup: "Rare orchids worth a fortune were dug up from a rooftop garden overnight." }
+  ];
+  var TRAITS = [
+    { label: "Came by", vals: ["car", "bus", "bike", "train"], short: ["Car", "Bus", "Bike", "Train"],
+      yes: function (v) { return "A ticket stub shows the mastermind came by " + v + "."; },
+      no: function (v) { return "Cameras prove the mastermind did not come by " + v + "."; } },
+    { label: "Drinks", vals: ["coffee", "tea", "juice"], short: ["Coffee", "Tea", "Juice"],
+      yes: function (v) { return "The mastermind left a half-finished cup of " + v + " behind."; },
+      no: function (v) { return "The mastermind can't stand " + v + " and never drinks it."; } },
+    { label: "Writes with", vals: ["left hand", "right hand"], short: ["Left-handed", "Right-handed"],
+      yes: function (v) { return "The ransom note was written with the " + v + "."; },
+      no: function (v) { return "Experts say the note was not written with the " + v + "."; } },
+    { label: "Wore", vals: ["a red scarf", "a grey coat", "a blue cap"], short: ["Red scarf", "Grey coat", "Blue cap"],
+      yes: function (v) { return "A witness saw the mastermind wearing " + v + "."; },
+      no: function (v) { return "Nobody near the scene was wearing " + v + "."; } }
+  ];
+  // How many clues each trait gets (always 6 in total).
+  var WEEK_SPLITS = [[3, 1, 1, 1], [2, 2, 1, 1], [2, 1, 1, 2], [1, 2, 1, 2]];
+  var weekCache = {};
+  function buildWeek(w) {
+    if (weekCache[w]) return weekCache[w];
+    var r = rngFrom("wl-week-" + w);
+    var A = TRAITS.map(function (a) { return Math.floor(r() * a.vals.length); });
+    var split = pick(WEEK_SPLITS, r), clues = [], people = [];
+    // Each clue gets one suspect who matches the mastermind except on that clue's trait,
+    // so that clue (and only that clue) rules them out.
+    TRAITS.forEach(function (a, ai) {
+      var others = shuffle(a.vals.map(function (_, v) { return v; }).filter(function (v) { return v !== A[ai]; }), r);
+      if (split[ai] === 1 && r() < 0.5) {
+        clues.push({ a: ai, yes: true, v: A[ai] });
+        people.push(A.map(function (x, k) { return k === ai ? others[0] : x; }));
+      } else {
+        others.slice(0, split[ai]).forEach(function (v) {
+          clues.push({ a: ai, yes: false, v: v });
+          people.push(A.map(function (x, k) { return k === ai ? v : x; }));
+        });
+      }
+    });
+    // One decoy who differs on two traits (ruled out twice).
+    var two = shuffle([0, 1, 2, 3], r).slice(0, 2);
+    people.push(A.map(function (x, k) {
+      if (two.indexOf(k) < 0) return x;
+      var hit = clues.filter(function (c) { return c.a === k; })[0];
+      return hit.yes ? (x + 1) % TRAITS[k].vals.length : hit.v;
+    }));
+    people.push(A);
+    var order = shuffle(people.map(function (_, i) { return i; }), r);
+    var names = shuffle(NAMES, r), roles = shuffle(ROLES, r);
+    var sus = order.map(function (pi, i) {
+      return { name: names[i], role: roles[i], t: people[pi], traits: people[pi].map(function (v, ai) { return TRAITS[ai].short[v]; }) };
+    });
+    var ans = order.indexOf(people.length - 1);
+    var fits = function (c, t) { return c.yes ? t[c.a] === c.v : t[c.a] !== c.v; };
+    var story = WEEK_CASES[(w - 1) % WEEK_CASES.length], m = sus[ans];
+    weekCache[w] = {
+      week: w, title: story.title, setup: story.setup, answer: ans, suspects: sus,
+      clues: shuffle(clues, r).map(function (c) {
+        var a = TRAITS[c.a], out = [];
+        sus.forEach(function (s, si) { if (!fits(c, s.t)) out.push(si); });
+        return { text: (c.yes ? a.yes : a.no)(a.vals[c.v]), out: out };
+      }),
+      why: m.name + " is the only one who fits every clue: came by " + TRAITS[0].vals[m.t[0]] + ", drinks " + TRAITS[1].vals[m.t[1]] +
+        ", writes with the " + TRAITS[2].vals[m.t[2]] + " and wore " + TRAITS[3].vals[m.t[3]] + "."
+    };
+    return weekCache[w];
+  }
+
   /* ---------- saved progress ---------- */
   var KEY = "whoslying:v1";
   function load() {
@@ -765,6 +863,7 @@
     buildDay: buildDay, generateCase: generateCase, endlessSpec: endlessSpec, endlessSeconds: endlessSeconds,
     careerSpec: careerSpec, buildCareerLevel: buildCareerLevel, chapterOf: chapterOf, chapterName: chapterName, clock: clock,
     avatar: avatar, load: load, save: save, esc: esc, fmtTime: fmtTime, fmtCountdown: fmtCountdown,
-    track: track, siteUrl: siteUrl, FACTS: FACTS, PREMISES: PREMISES, CASES: CASES
+    track: track, siteUrl: siteUrl, FACTS: FACTS, PREMISES: PREMISES, CASES: CASES,
+    weekOf: weekOf, weekday: weekday, buildWeek: buildWeek, buildNight: buildNight, NIGHT_HOUR: NIGHT_HOUR, TRAITS: TRAITS
   };
 })();

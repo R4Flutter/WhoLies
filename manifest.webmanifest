@@ -1,10 +1,13 @@
 {
+  "id": "./",
   "name": "Who's Lying?",
   "short_name": "Who's Lying",
-  "description": "A daily detective game. Five short cases, one lie in each.",
+  "description": "A daily detective game. Five short cases, one lie in each. New cases every day.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "orientation": "any",
+  "categories": ["games", "puzzle", "entertainment"],
   "background_color": "#e7eee5",
   "theme_color": "#e7eee5",
   "icons": [

@@ -43,6 +43,63 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Weekly league: one entry per player per week (weeks are 7 Dailies, Monday to Sunday).
+    // Points, time and days must equal the player's own posted Daily scores for that week,
+    // so nobody can make them up. The tier can move one step from last week's; no entry
+    // last week means starting again in Bronze (tier 0).
+    function scorePath(day) { return /databases/$(database)/documents/scores/$(string(day) + '_' + request.auth.uid); }
+    function sc(w, i) { return exists(scorePath(w * 7 - 6 + i)) ? get(scorePath(w * 7 - 6 + i)).data.score : 0; }
+    function tm(w, i) { return exists(scorePath(w * 7 - 6 + i)) ? get(scorePath(w * 7 - 6 + i)).data.timeMs : 0; }
+    function pl(w, i) { return exists(scorePath(w * 7 - 6 + i)) ? 1 : 0; }
+    function okWeek(d) {
+      let w = d.week;
+      return d.pts == sc(w, 0) + sc(w, 1) + sc(w, 2) + sc(w, 3) + sc(w, 4) + sc(w, 5) + sc(w, 6)
+          && d.timeMs == tm(w, 0) + tm(w, 1) + tm(w, 2) + tm(w, 3) + tm(w, 4) + tm(w, 5) + tm(w, 6)
+          && d.days == pl(w, 0) + pl(w, 1) + pl(w, 2) + pl(w, 3) + pl(w, 4) + pl(w, 5) + pl(w, 6);
+    }
+    function lastWeek(w) { return /databases/$(database)/documents/league/$(string(w - 1) + '_' + request.auth.uid); }
+    function okTier(w, t) {
+      return t is int && t >= 0 && t <= 4
+          && (exists(lastWeek(w)) ? (t >= get(lastWeek(w)).data.tier - 1 && t <= get(lastWeek(w)).data.tier + 1) : t == 0);
+    }
+    match /league/{id} {
+      allow read: if true;
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'badge', 'week', 'tier', 'pts', 'timeMs', 'days', 'updatedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.week is int
+        && request.resource.data.week >= 1 && request.resource.data.week <= 20000
+        && id == string(request.resource.data.week) + '_' + request.auth.uid
+        && okName(request.resource.data.name)
+        && okBadge(request.resource.data.badge)
+        && (resource == null ? okTier(request.resource.data.week, request.resource.data.tier) : request.resource.data.tier == resource.data.tier)
+        && okWeek(request.resource.data)
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // Friend groups: anyone with the code can read and join. Members can only add,
+    // rename or remove themselves.
+    function okGroupName(n) { return n is string && n.size() >= 2 && n.size() <= 24; }
+    match /groups/{code} {
+      allow read: if true;
+      allow create: if signedIn()
+        && code.matches('^[A-Z2-9]{6}$')
+        && request.resource.data.keys().hasOnly(['name', 'owner', 'members', 'createdAt'])
+        && okGroupName(request.resource.data.name)
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.members is map
+        && request.resource.data.members.keys().hasOnly([request.auth.uid])
+        && okName(request.resource.data.members[request.auth.uid])
+        && request.resource.data.createdAt == request.time;
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+        && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.members.size() <= 50
+        && (!(request.auth.uid in request.resource.data.members) || okName(request.resource.data.members[request.auth.uid]));
+      allow delete: if false;
+    }
+
     // Endless mode: each player keeps their best run. It can only go up.
     match /endless/{userId} {
       allow read: if true;

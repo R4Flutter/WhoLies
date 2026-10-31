@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Who's Lying?</title>
-<meta name="description" content="A detective game: read the facts, check every story and catch the liar. Career cases, a Daily Case and Rush mode.">
+<meta name="description" content="A daily detective game: 5 new cases every day, a weekly mastermind case, leagues and friend challenges. Read the facts, check every story and catch the liar.">
 <meta name="theme-color" content="#e7eee5" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0e1612" media="(prefers-color-scheme: dark)">
 <!-- WEB-ONLY:START -->
@@ -16,7 +16,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Who's Lying?">
 <meta property="og:title" content="Who's Lying? Catch the liar">
-<meta property="og:description" content="Read the facts, check every story and catch the liar. New cases every day.">
+<meta property="og:description" content="5 new cases every day. Catch the liar, keep your streak, beat your friends.">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
@@ -77,29 +77,58 @@
               <div class="xpbar" role="progressbar" id="xpbar" aria-valuemin="0"><span id="xpfill"></span></div>
               <p class="xp-text" id="xp-text"></p>
             </div>
+            <button class="streak-chip" id="streak-chip" type="button">
+              <svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 4-3 5.5-3 9.5A3 3 0 0 0 12 15a3 3 0 0 0 3-3.2c0-1.6-1-2.6-1-4.3 2.7 1.4 5 4.6 5 8A7 7 0 0 1 5 15.5C5 9.6 10.5 7.4 12 2z"/></svg>
+              <b id="streak-n">0</b><span class="shield-pips" id="streak-shields"></span>
+            </button>
           </div>
-          <div class="career-card" id="career-card">
+          <div class="hq-banner" id="hq-banner" hidden></div>
+          <article class="today-card" id="today-card" aria-labelledby="today-title">
             <canvas class="trace card-trace" id="hq-trace" aria-hidden="true"></canvas>
+            <div class="today-in">
+              <p class="eyebrow" id="today-eyebrow">Daily Case</p>
+              <h1 class="today-title" id="today-title">5 new cases</h1>
+              <div class="res-grid small" id="today-cells" hidden></div>
+              <p class="today-sub" id="today-sub"></p>
+              <p class="today-meta" id="today-meta" hidden></p>
+              <button class="btn danger big wide" id="btn-daily" type="button">Play today's cases</button>
+            </div>
+          </article>
+          <article class="week-card" id="week-card" aria-labelledby="week-title">
+            <div class="week-head"><p class="eyebrow">Case of the Week</p><span class="muted small" id="week-left"></span></div>
+            <h2 class="week-title" id="week-title"></h2>
+            <ol class="week-slots" id="week-slots"></ol>
+            <p class="week-sub" id="week-sub"></p>
+            <button class="btn ghost wide" id="btn-week" type="button">Open the case board</button>
+          </article>
+          <div class="modes">
+            <button class="mode-tile night" id="tile-night" type="button">
+              <span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></span>
+              <span class="mode-txt"><b>Night Shift</b><span id="night-sub">A hard bonus case at 8 PM</span></span>
+              <span class="mode-flag" id="night-flag" hidden>Open</span>
+            </button>
+            <button class="mode-tile rush" id="tile-rush" type="button">
+              <span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg></span>
+              <span class="mode-txt"><b>Rush</b><span id="rush-sub">Catch liars against the clock</span></span>
+            </button>
+          </div>
+        </div>
+        <div class="hq-col">
+          <!-- WEB-ONLY:START -->
+          <button class="league-card" id="league-card" type="button" hidden>
+            <span class="league-emblem" id="league-emblem" aria-hidden="true"></span>
+            <span class="league-txt"><span class="eyebrow">Weekly league</span><b id="league-name">Bronze League</b><span class="muted small" id="league-sub"></span></span>
+            <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <!-- WEB-ONLY:END -->
+          <div class="career-card" id="career-card">
             <div class="career-in">
               <p class="eyebrow" id="career-chapter">Chapter 1</p>
-              <h1 class="career-name" id="career-name">Rookie Beat</h1>
+              <h2 class="career-name" id="career-name">Rookie Beat</h2>
               <div class="nodes" id="career-nodes"></div>
               <button class="btn primary big wide" id="btn-play" type="button">Play case 1</button>
               <button class="link-btn" id="btn-map" type="button">Chapter map</button>
             </div>
-          </div>
-        </div>
-        <div class="hq-col">
-          <div class="modes">
-            <button class="mode-tile" id="tile-daily" type="button">
-              <span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span>
-              <span class="mode-txt"><b>Daily Case</b><span id="daily-sub">5 new cases every day</span></span>
-              <span class="mode-flag" id="daily-flag" hidden>New</span>
-            </button>
-            <button class="mode-tile" id="tile-rush" type="button">
-              <span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg></span>
-              <span class="mode-txt"><b>Rush</b><span id="rush-sub">Catch liars against the clock</span></span>
-            </button>
           </div>
           <div class="missions" id="missions">
             <div class="missions-head"><h2>Today's missions</h2><span class="muted" id="missions-reset"></span></div>
@@ -107,11 +136,12 @@
             <div class="chest" id="chest"></div>
           </div>
           <nav class="hq-links" aria-label="More">
+            <button class="chip-btn" id="btn-board" type="button" hidden>Leaderboard</button>
+            <button class="chip-btn" id="btn-friends" type="button" hidden>Friends</button>
+            <button class="chip-btn" id="btn-files" type="button">Case files</button>
             <button class="chip-btn" id="btn-shop" type="button">Shop</button>
             <button class="chip-btn" id="btn-ach" type="button">Achievements</button>
             <button class="chip-btn" id="btn-stats" type="button">Stats</button>
-            <button class="chip-btn" id="btn-board" type="button" hidden>Leaderboard</button>
-            <a class="chip-btn web-only" href="archive.html">Past cases</a>
           </nav>
         </div>
       </div>
@@ -188,6 +218,7 @@
           <h2 class="res-title" id="res-title" tabindex="-1"></h2>
           <div id="res-body"></div>
           <div class="rewards big" id="res-rewards"></div>
+          <div class="versus" id="res-versus" hidden></div>
           <dl class="stat-row" id="res-stats"></dl>
           <div class="res-progress" id="res-progress"></div>
         </div>
@@ -205,6 +236,7 @@
             <textarea class="share-text" id="share-text" readonly hidden aria-label="Your result text"></textarea>
           </div>
           <div class="rank-card" id="res-rank" hidden></div>
+          <div class="res-extra" id="res-extra"></div>
           <p class="countdown-line" id="res-next"></p>
           <details class="review" id="review">
             <summary>Review the answers</summary>
@@ -245,6 +277,30 @@
       </div>
     </section>
 
+    <!-- CASE FILES: past Dailies -->
+    <section class="scr list-scr" id="scr-files" aria-labelledby="files-h" hidden>
+      <div class="list-in">
+        <h2 class="page-h" id="files-h">Case files</h2>
+        <p class="files-keys" id="files-keys"></p>
+        <ol class="files" id="files-list"></ol>
+        <button class="btn ghost" id="files-more" type="button" hidden>Show older days</button>
+      </div>
+    </section>
+
+    <!-- CASE OF THE WEEK board -->
+    <section class="scr list-scr" id="scr-week" aria-labelledby="wk-title" hidden>
+      <div class="list-in wk">
+        <p class="eyebrow" id="wk-eyebrow"></p>
+        <h2 class="page-h" id="wk-title"></h2>
+        <p class="wk-setup" id="wk-setup"></p>
+        <div class="wk-status" id="wk-status" aria-live="polite"></div>
+        <h3 class="sec">Clues <span class="muted small" id="wk-count"></span></h3>
+        <ol class="wk-clues" id="wk-clues"></ol>
+        <h3 class="sec">Suspects <span class="muted small" id="wk-tip">Tap a suspect to cross them out</span></h3>
+        <div class="wk-suspects" id="wk-suspects"></div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -269,6 +325,10 @@
     <label class="switch"><input type="checkbox" id="set-sound"><span>Sound effects</span></label>
     <button class="btn ghost wide" type="button" id="btn-themes">Desk themes</button>
     <button class="btn ghost wide" type="button" id="btn-help">How to play</button>
+    <!-- WEB-ONLY:START -->
+    <button class="btn ghost wide web-only" type="button" id="btn-reminder">Daily reminder</button>
+    <button class="btn ghost wide web-only" type="button" id="btn-install" hidden>Install the app</button>
+    <!-- WEB-ONLY:END -->
     <div class="danger-zone">
       <button class="link-btn" type="button" id="btn-reset">Reset all progress</button>
       <div class="reset-confirm" id="reset-confirm" hidden>
@@ -298,7 +358,11 @@
       <li><span class="star-ico on"></span><span class="star-ico"></span><span class="star-ico"></span> Solved after a wrong guess</li>
     </ul>
     <h3>Modes</h3>
-    <p><strong>Career:</strong> chapter after chapter of cases. <strong>Daily Case:</strong> 5 cases a day, one try each. <strong>Rush:</strong> catch as many liars as you can before you run out of lives.</p>
+    <p><strong>Daily Case:</strong> 5 cases a day, the same for everyone, one try each. <strong>Career:</strong> chapter after chapter of cases. <strong>Rush:</strong> catch as many liars as you can before you run out of lives. <strong>Night Shift:</strong> one hard bonus case every evening from 8 PM.</p>
+    <h3>Case of the Week</h3>
+    <p>Each Daily from Monday to Saturday gives you one clue to a bigger case. On Sunday, use all 6 clues to name the mastermind. You get one try.</p>
+    <h3>Streaks, shields and keys</h3>
+    <p>Play the Daily every day to grow your streak. A <strong>Streak Shield</strong> saves it if you miss a day. A <strong>Case Key</strong> opens a Daily you missed, with full rewards and its weekly clue. You earn one of each every 7 days in a row.</p>
     <p class="muted">Keyboard: keys 1-5 pick, Enter confirms, Esc cancels.</p>
     <button class="btn primary wide" type="button" data-close>Got it</button>
   </div>
@@ -354,10 +418,16 @@
     <h2 id="board-h">Leaderboard</h2>
     <p class="demo-note" id="board-demo" hidden>Demo mode: these players are made up, and nothing you post leaves this device.</p>
     <div class="tabs" role="tablist" aria-label="Which leaderboard">
-      <button class="tab" type="button" role="tab" data-tab="today" aria-selected="true">Today</button>
-      <button class="tab" type="button" role="tab" data-tab="yesterday" aria-selected="false">Yesterday</button>
+      <button class="tab" type="button" role="tab" data-tab="today" aria-selected="true">Daily</button>
+      <button class="tab" type="button" role="tab" data-tab="league" aria-selected="false">League</button>
+      <button class="tab" type="button" role="tab" data-tab="friends" aria-selected="false">Friends</button>
       <button class="tab" type="button" role="tab" data-tab="endless" aria-selected="false">Rush</button>
     </div>
+    <div class="seg" id="board-seg" role="group" aria-label="Which day">
+      <button type="button" data-day="today" aria-pressed="true">Today</button>
+      <button type="button" data-day="yesterday" aria-pressed="false">Yesterday</button>
+    </div>
+    <div class="board-head" id="board-head" hidden></div>
     <p class="board-note" id="board-note"></p>
     <ol class="board" id="board-list" aria-live="polite"></ol>
     <div class="board-me" id="board-me"></div>
@@ -385,7 +455,45 @@
     <button class="btn primary wide" type="button" data-close>Nice!</button>
   </div>
 </dialog>
+
+<dialog id="dlg-group" aria-labelledby="group-h">
+  <form class="dlg" id="group-form" novalidate>
+    <button class="icon-btn dlg-close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <h2 id="group-h">Friend groups</h2>
+    <p>Compare today's results with friends, family or your office. Up to 50 detectives per group.</p>
+    <label class="field-label" for="group-name">Start a new group</label>
+    <div class="field-row"><input class="field" id="group-name" type="text" maxlength="24" placeholder="Office Sleuths" autocomplete="off"><button class="btn primary" id="group-create" type="button">Create</button></div>
+    <label class="field-label" for="group-code">Or join with a code</label>
+    <div class="field-row"><input class="field code" id="group-code" type="text" maxlength="7" placeholder="ABC234" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn ghost" id="group-join" type="button">Join</button></div>
+    <p class="field-error" id="group-error" role="alert" hidden></p>
+  </form>
+</dialog>
+
+<dialog id="dlg-reminder" aria-labelledby="rem-h">
+  <div class="dlg">
+    <button class="icon-btn dlg-close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <h2 id="rem-h">Daily reminder</h2>
+    <p>Add a daily alarm to your calendar, so you never miss a case or lose your streak.</p>
+    <label class="field-label" for="rem-time">Remind me every day at</label>
+    <input class="field" id="rem-time" type="time" value="09:00">
+    <a class="btn primary wide" id="rem-google" href="#" target="_blank" rel="noopener">Add to Google Calendar</a>
+    <button class="btn ghost wide" id="rem-ics" type="button">Apple or Outlook calendar (.ics)</button>
+    <p class="muted small">It's a normal calendar event. You can delete it any time.</p>
+  </div>
+</dialog>
 <!-- WEB-ONLY:END -->
+
+<dialog id="dlg-notice" aria-labelledby="notice-h">
+  <div class="dlg center">
+    <div class="notice-icon" id="notice-icon" aria-hidden="true"></div>
+    <p class="eyebrow" id="notice-eyebrow" hidden></p>
+    <h2 id="notice-h"></h2>
+    <p id="notice-text"></p>
+    <div class="notice-body" id="notice-body"></div>
+    <button class="btn primary wide" id="notice-yes" type="button">OK</button>
+    <button class="btn ghost wide" id="notice-no" type="button" hidden></button>
+  </div>
+</dialog>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="boot" id="boot" aria-hidden="true"><span class="boot-title">Who's Lying<span class="q">?</span></span><span class="boot-bar"><span></span></span></div>

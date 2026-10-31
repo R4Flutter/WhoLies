@@ -168,13 +168,16 @@
     var u = CFG.siteUrl || "";
     if (!u || /example/.test(u)) u = location.origin && location.origin !== "null" ? location.origin + location.pathname.replace(/[^/]*$/, "") : "";
     u = u.replace(/\/$/, "") + "/";
+    if (params && params.c) return u + "?c=" + encodeURIComponent(params.c);
+    if (params && params.g) return u + "?g=" + encodeURIComponent(params.g);
     if (params && params.day) return u + "#day-" + params.day;
     if (params && params.mode === "rush") return u + "#endless";
     return u;
   }
+  // A value from an invite link: CrazyGames invite params, or ?key= on the web.
   function inviteParam(key) {
     if (name === "crazygames") return cg() ? safe(function () { return sdk.game.getInviteParam(key); }, null) : null;
-    return null;
+    return safe(function () { return new URLSearchParams(location.search).get(key); }, null);
   }
 
   /* ---------- CrazyGames leaderboard (invite-only feature, off by default) ---------- */

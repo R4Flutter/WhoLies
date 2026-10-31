@@ -10,13 +10,15 @@ It is plain HTML, CSS and JavaScript with no build step. The web version is host
 
 ## What's in the game
 
-**Three ways to play**
+**Five ways to play**
 
 | Mode | What it is |
 |---|---|
+| Daily Case | 5 cases a day, the same for everyone, with a streak and a shareable result. The hero of the home screen. |
+| Case of the Week | Each Daily from Monday to Saturday gives one clue to a bigger case (8 suspects). On Sunday, name the mastermind with one try. Missed a day? Catch up with a Case Key or buy the clue. |
+| Night Shift | One hard bonus case every evening from 8 PM, one try. The screen switches to the night theme. |
 | Career | Endless chapters of 10 cases (Rookie Beat, Downtown, The Harbor…). Cases get harder as you go. Cases 5 and 10 of each chapter are twists. Earn up to 3 stars per case by being fast and not using hints. New players land straight in case 1 with a short coach. |
 | Rush | Catch as many liars as you can against the clock. 3 lives, a combo multiplier, a faster clock as you go, and one second chance per run. |
-| Daily Case | 5 cases a day, the same for everyone, with a streak and a shareable result. |
 
 **Twist cases:** "two are lying, find the honest one" and "everyone is honest, find the fake fact".
 
@@ -24,13 +26,21 @@ It is plain HTML, CSS and JavaScript with no build step. The web version is host
 
 | Hook | What it does |
 |---|---|
+| Streak Shields | Save your Daily streak if you miss a day (used automatically, hold up to 2). Earn one every 7 days in a row or buy one for 200 coins. |
+| Case Keys + Case Files | Case Files lists every past Daily. A Case Key opens a missed day with full rewards and its weekly clue. Earn one every 7 days in a row, on day 7 of the login calendar, or buy them. |
+| Comeback gift | Players who return after 3+ days get 150 coins, 2 Magnifiers and a Case Key. |
+| Friend challenges | Every shared result is a challenge link. Your friend plays the same Daily and sees "You beat Raj by 12 seconds!" with a rematch button. Works on CrazyGames too (invite links). |
+| Rank among everyone | After the Daily: "#37 of 230 today, better than 84% of players", also in the share text. |
+| Weekly leagues (web) | Bronze → Silver → Gold → Platinum → Diamond. Points are liars caught in that week's Dailies. Top 20% move up on Monday, bottom 20% move down. |
+| Friend groups (web) | Make a group, share the code or link, see each member's Daily result side by side. Up to 50 per group. |
+| Install + reminder (web) | Installs as an app (works offline). A "Remind me" button adds a daily calendar alarm (Google Calendar or .ics). |
 | Stars and chapters | 3 stars per case, a chapter map, replay any case to improve your stars. |
 | Streak bonus | Solve cases in a row on the first try for up to ×2 coins. |
 | Levels and titles | XP from every case. Rookie → Patrol Officer → … → Legend, with a badge that changes metal. Level-ups pay coins. |
 | Coins and shop | Spend coins on Magnifiers (rule out a wrong answer), Time Freezes (+10 s in Rush) and 6 desk themes. |
 | Daily missions | 3 new missions every day ("Earn 3 stars on 3 cases"…), plus a mission chest when all 3 are done. |
 | 7-day login calendar | A bigger reward each day you come back, with an option to double it by watching an ad. |
-| Achievements | 22 achievements with coin rewards. |
+| Achievements | 31 achievements with coin rewards. |
 | What's next | Every results screen shows your level bar and the next mission, so there's always one more goal. |
 | Sound and juice | Sound effects, a noir-jazz music loop, stamps, confetti, floating rewards, screen shake. |
 
@@ -54,10 +64,11 @@ js/progress.js             levels, coins, stars, missions, login calendar, shop,
 js/game.js                 all the screens
 js/platform.js             web vs CrazyGames: ads, saves, mute, username, invite links
 js/audio.js, js/fx.js      sound and visual effects
-js/leaderboard.js          web leaderboard + top-100 rewards (Firebase)
+js/leaderboard.js          web leaderboard, top-100 rewards, rank, weekly leagues, friend groups (Firebase)
 js/ads.js                  web ads (none / demo / AdSense)
 assets/                    sounds, music, fonts, icons
-firebase/                  database rules for the web leaderboard
+sw.js                      offline play + app install (web only)
+firebase.json, firebase/   database settings, rules and indexes for the web leaderboard
 tools/build-crazygames.mjs builds the CrazyGames zip
 tools/check-cases.mjs      checks every case for mistakes
 tools/elevenlabs-audio.mjs remakes all sounds with ElevenLabs
@@ -78,6 +89,11 @@ Test addresses:
 - `?ads=demo` shows grey boxes where ads will appear.
 - `?lb=demo` turns on the leaderboard with made-up players.
 - `#endless` jumps straight into Rush.
+- `?c=6.ggyrg.92.Raj` opens a friend challenge (Daily #6, 4 of 5, 92 seconds, from Raj).
+- `?g=ABC234` opens a friend group invite.
+- `?test=1` adds `window.__WLtest` for automated checks (start any mode, read the saved state).
+
+Testing on `localhost` uses the real database, so delete test scores afterwards (Firestore console, or `firebase firestore:delete scores/<id>`).
 
 To start over, clear the site's data in your browser (the save is in `localStorage` under `whoslying:v1`).
 
@@ -93,7 +109,17 @@ git commit -m "Describe your change"
 git push
 ```
 
-**Move to your own .com later:** buy a domain, then in the repo go to **Settings → Pages → Custom domain** and follow the DNS steps. Change `siteUrl` in `js/config.js` and the address in `index.html`, `archive.html`, `privacy.html`, `robots.txt` and `sitemap.xml`.
+### Move to your own domain
+
+**Do this before you promote the game.** Each player's save (level, coins, streak, leaderboard name) lives in their browser and belongs to one web address. When the address changes, every player starts from zero.
+
+1. At your domain seller, add these DNS records (example: `whoslying.com`):
+   - 4 × `A` records for `@`: `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
+   - 1 × `CNAME` record for `www`: `r4flutter.github.io`
+2. Make a file named `CNAME` (no extension) in the top folder of this repo with one line: `whoslying.com`. It has to be in `main`: the publish workflow copies `main` over `gh-pages` on every push, so a domain set only in GitHub's settings page is wiped by the next push.
+3. Replace `https://r4flutter.github.io/WhoLies` with `https://whoslying.com` in `js/config.js` (`siteUrl`), `index.html`, `archive.html`, `privacy.html`, `robots.txt` and `sitemap.xml`.
+4. Push. Then in the repo go to **Settings → Pages**, check the custom domain shows `whoslying.com`, and tick **Enforce HTTPS** once it's allowed (can take up to an hour).
+5. Firebase console → **Authentication → Settings → Authorized domains → Add domain** → `whoslying.com`.
 
 ---
 
@@ -160,20 +186,30 @@ CrazyGames leaderboards are invite-only. If they invite the game, paste the **En
 
 ---
 
-## 4. Web leaderboard (Firebase, free, about 10 minutes)
+## 4. Web leaderboard (Firebase, free)
 
-The web leaderboard stays hidden until you do this.
+The leaderboard is **on**. It uses the free Firebase project `whoslying-daily` (console: https://console.firebase.google.com/project/whoslying-daily). Its web config is in `js/config.js` → `leaderboard.firebase`. That key is meant to be public; the rules protect the data.
 
-1. Go to https://console.firebase.google.com → **Create a project**.
-2. **Build → Authentication → Get started → Sign-in method → Anonymous → Enable.**
-3. **Build → Firestore Database → Create database**, production mode.
-4. **Rules** tab: paste everything from `firebase/firestore.rules` → **Publish**.
-5. **Indexes → Composite → Create index**: collection `scores`, fields `day` Ascending, `score` Descending, `timeMs` Ascending.
-6. Gear icon → **Project settings → Your apps → Web (`</>`)** → register an app and copy `firebaseConfig`.
-7. Paste it into `js/config.js` → `leaderboard.firebase`. This key is meant to be public; the rules protect the data.
-8. Commit and push. The 🏆 button appears.
+It stores four collections:
 
-Daily top-100 players get a badge (🥇 🥈 🥉 🎖️ 🏅) and a prize hint once the day's ranks lock in (38 hours after it starts). If you change `launchDate`, change the `dayStart` line in `firebase/firestore.rules` too.
+| Collection | What's in it |
+|---|---|
+| `scores` | One Daily result per player per day (can't be changed later). |
+| `endless` | Each player's best Rush run (can only go up). |
+| `league` | One entry per player per week. The rules re-add the player's own Daily scores, so league points can't be faked. |
+| `groups` | Friend groups: name and members. Members can only add, rename or remove themselves. |
+
+Everything about the database is in this repo: `firebase.json` (location, anonymous sign-in), `firebase/firestore.rules` and `firebase/firestore.indexes.json`. After you change any of them, run:
+
+```
+firebase deploy --only firestore,auth
+```
+
+To see or delete scores (for example a cheater), open **Firestore Database → Data** in the console.
+
+Daily top-100 players get a badge (🥇 🥈 🥉 🎖️ 🏅) and a prize hint once the day's ranks lock in (38 hours after it starts). If you change `launchDate`, change the `dayStart` line in `firebase/firestore.rules` too, and pick a **Monday**: weeks (Case of the Week, leagues) run from Daily #1, so #1 has to be a Monday.
+
+**Push notifications** are the next step up from the calendar reminder. They need a Firebase Cloud Messaging key and a small scheduled job (a GitHub Actions cron works on the free plan) that sends "New cases are ready" each morning.
 
 ---
 
@@ -256,6 +292,7 @@ node tools/check-cases.mjs
 
 ## Tech notes
 
-- Daily cases come from a random number generator seeded with the day number, so everyone gets the same ones. Career level N is seeded with N, so it's the same for every player too.
+- Daily cases come from a random number generator seeded with the day number, so everyone gets the same ones. Career level N is seeded with N, so it's the same for every player too. The Case of the Week is seeded with the week number, the Night Shift with the day.
+- `node tools/check-cases.mjs` also checks 400 Night Shift cases and 400 weekly cases: the mastermind fits every clue, everyone else is ruled out, and every clue rules out someone no other clue does (so each missed day really matters).
 - The game code, styles and fonts are about 420 KB. Sounds load after the first tap.
 - Fonts: Big Shoulders Display and Atkinson Hyperlegible (SIL Open Font License, files in `assets/fonts`).

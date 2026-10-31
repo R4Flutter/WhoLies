@@ -82,6 +82,9 @@
 
   function friendlyError(e) {
     var code = e && e.code ? e.code : "";
+    if (code === "demo") return "Not available in demo mode.";
+    if (code === "not-found") return "That group code doesn't exist. Check it and try again.";
+    if (code === "full") return "That group is full (50 detectives).";
     if (code === "failed-precondition") {
       console.warn("[leaderboard] Firestore needs an index. Open the link in this message to create it:", e.message);
       return "The leaderboard is still being set up. Try again in a few minutes.";
@@ -111,6 +114,68 @@
     return out;
   }
   function sortDaily(rows) { return rows.sort(function (a, b) { return b.score - a.score || a.timeMs - b.timeMs; }); }
+
+  /* ---------- counting (Firestore REST: the compat SDK can't count) ---------- */
+  function demoOff() { var e = new Error("demo"); e.code = "demo"; return Promise.reject(e); }
+  function restCount(coll, filters, order) {
+    var f = filters.map(function (x) { return { fieldFilter: { field: { fieldPath: x[0] }, op: x[1], value: { integerValue: String(x[2]) } } }; });
+    var q = { from: [{ collectionId: coll }], where: f.length === 1 ? f[0] : { compositeFilter: { op: "AND", filters: f } } };
+    if (order) q.orderBy = order.map(function (o) { return { field: { fieldPath: o[0] }, direction: o[1] }; });
+    return fetch("https://firestore.googleapis.com/v1/projects/" + fb.projectId + "/databases/(default)/documents:runAggregationQuery?key=" + fb.apiKey, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ structuredAggregationQuery: { structuredQuery: q, aggregations: [{ alias: "n", count: {} }] } })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      var row = Array.isArray(j) ? j[0] : j;
+      if (!row || !row.result) throw new Error((row && row.error && row.error.message) || "Count failed");
+      return +row.result.aggregateFields.n.integerValue;
+    });
+  }
+  // Rank of a result among everyone with the same eq fields: higher `key` first, then less time.
+  function standing(coll, eq, key, val, t) {
+    if (provider !== "firebase") return demoOff();
+    var base = eq.map(function (e) { return [e[0], "EQUAL", e[1]]; });
+    return Promise.all([
+      restCount(coll, base),
+      restCount(coll, base.concat([[key, "GREATER_THAN", val]]), [[key, "DESCENDING"], ["timeMs", "ASCENDING"]]),
+      restCount(coll, base.concat([[key, "EQUAL", val], ["timeMs", "LESS_THAN", t]]), [["timeMs", "ASCENDING"]])
+    ]).then(function (n) { var rank = n[1] + n[2] + 1; return { rank: rank, total: Math.max(n[0], rank) }; });
+  }
+
+  /* ---------- weekly league ----------
+     One doc per player per week. Points = liars caught in that week's Dailies (from the
+     player's own posted scores, which the rules re-add to check). 5 tiers. */
+  var LEAGUES = [
+    { name: "Bronze", icon: "🥉" }, { name: "Silver", icon: "🥈" }, { name: "Gold", icon: "🥇" },
+    { name: "Platinum", icon: "💠" }, { name: "Diamond", icon: "💎" }
+  ];
+  // Top 20% move up, bottom 20% move down (only when there are 5+ players in the tier).
+  function leagueMove(tier, rank, total, pts) {
+    var up = Math.max(1, Math.round(total * 0.2)), down = total >= 5 ? Math.floor(total * 0.2) : 0;
+    if (tier < LEAGUES.length - 1 && pts > 0 && rank <= up) return 1;
+    if (tier > 0 && down && rank > total - down) return -1;
+    return 0;
+  }
+  function weekTotals(week) {
+    var ids = [];
+    for (var i = 0; i < 7; i++) ids.push(((week - 1) * 7 + 1 + i) + "_" + uid);
+    return Promise.all(ids.map(function (id) { return db.collection("scores").doc(id).get(); })).then(function (snaps) {
+      var t = { pts: 0, timeMs: 0, days: 0 };
+      snaps.forEach(function (s) { if (s.exists) { t.pts += s.data().score; t.timeMs += s.data().timeMs; t.days++; } });
+      return t;
+    });
+  }
+
+  /* ---------- friend groups ---------- */
+  var CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  function newCode() { var c = ""; for (var i = 0; i < 6; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]; return c; }
+  function cleanCode(raw) { var c = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); return /^[A-Z2-9]{6}$/.test(c) ? c : ""; }
+  function cleanGroupName(raw) {
+    var n = String(raw || "").replace(/\s+/g, " ").trim();
+    if (n.length < 2 || n.length > 24) return { ok: false, msg: "Use 2 to 24 characters." };
+    if (BLOCK.test(n.replace(/[\s._-]/g, ""))) return { ok: false, msg: "Please pick a different name." };
+    return { ok: true, name: n };
+  }
+  function err(code, msg) { var e = new Error(msg); e.code = code; return e; }
 
   /* ---------- public API ---------- */
   window.WLLB = {
@@ -176,6 +241,89 @@
         }
         return db.collection("endless").orderBy("best", "desc").limit(LIMIT).get()
           .then(function (snap) { return snap.docs.map(function (d) { return d.data(); }); });
+      });
+    },
+
+    /* Rank among everyone who posted today: { rank, total } */
+    dailyStanding: function (day, score, timeMs) {
+      return standing("scores", [["day", day]], "score", score, Math.max(20000, Math.round(timeMs)));
+    },
+
+    LEAGUES: LEAGUES,
+    leagueMove: leagueMove,
+    // Writes this week's league entry from the player's posted Daily scores. -> the entry
+    syncLeague: function (e) {
+      if (provider !== "firebase") return demoOff();
+      return ready().then(function () { return weekTotals(e.week); }).then(function (t) {
+        var doc = { uid: uid, name: e.name, badge: e.badge || "", week: e.week, tier: e.tier, pts: t.pts, timeMs: t.timeMs, days: t.days,
+          updatedAt: window.firebase.firestore.FieldValue.serverTimestamp() };
+        return db.collection("league").doc(e.week + "_" + uid).set(doc).then(function () { return doc; });
+      });
+    },
+    leagueMine: function (week) {
+      if (provider !== "firebase") return demoOff();
+      return ready().then(function () { return db.collection("league").doc(week + "_" + uid).get(); })
+        .then(function (s) { return s.exists ? s.data() : null; });
+    },
+    leagueTop: function (week, tier) {
+      if (provider !== "firebase") return demoOff();
+      return ready().then(function () {
+        return db.collection("league").where("week", "==", week).where("tier", "==", tier)
+          .orderBy("pts", "desc").orderBy("timeMs", "asc").limit(50).get();
+      }).then(function (snap) { return snap.docs.map(function (d) { return d.data(); }); });
+    },
+    leagueStanding: function (week, tier, pts, timeMs) { return standing("league", [["week", week], ["tier", tier]], "pts", pts, timeMs); },
+
+    cleanCode: cleanCode,
+    cleanGroupName: cleanGroupName,
+    getGroup: function (code) {
+      if (provider !== "firebase") return demoOff();
+      return ready().then(function () { return db.collection("groups").doc(code).get(); })
+        .then(function (s) { if (!s.exists) throw err("not-found", "No such group"); var g = s.data(); g.code = code; return g; });
+    },
+    createGroup: function (name, myName) {
+      if (provider !== "firebase") return demoOff();
+      return ready().then(function () {
+        var tries = 0;
+        var attempt = function () {
+          var code = newCode(), m = {}; m[uid] = myName;
+          return db.collection("groups").doc(code).set({ name: name, owner: uid, members: m, createdAt: window.firebase.firestore.FieldValue.serverTimestamp() })
+            .then(function () { return { code: code, name: name }; }, function (e) {
+              if (e && e.code === "permission-denied" && ++tries < 4) return attempt(); // code taken: try another
+              throw e;
+            });
+        };
+        return attempt();
+      });
+    },
+    joinGroup: function (code, myName) {
+      var self = this;
+      return self.getGroup(code).then(function (g) {
+        if (!(uid in g.members) && Object.keys(g.members).length >= 50) throw err("full", "Group is full");
+        var u = {}; u["members." + uid] = myName;
+        return db.collection("groups").doc(code).update(u).then(function () { g.members[uid] = myName; return g; });
+      });
+    },
+    leaveGroup: function (code) {
+      if (provider !== "firebase") return demoOff();
+      return ready().then(function () {
+        var u = {}; u["members." + uid] = window.firebase.firestore.FieldValue.delete();
+        return db.collection("groups").doc(code).update(u);
+      });
+    },
+    // Today's posted results for every member: { uid: scoreDoc }
+    groupScores: function (members, day) {
+      if (provider !== "firebase") return demoOff();
+      var ids = Object.keys(members).map(function (u) { return day + "_" + u; }), chunks = [];
+      for (var i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30));
+      return ready().then(function () {
+        return Promise.all(chunks.map(function (c) {
+          return db.collection("scores").where(window.firebase.firestore.FieldPath.documentId(), "in", c).get();
+        }));
+      }).then(function (snaps) {
+        var out = {};
+        snaps.forEach(function (s) { s.docs.forEach(function (d) { out[d.data().uid] = d.data(); }); });
+        return out;
       });
     },
 
