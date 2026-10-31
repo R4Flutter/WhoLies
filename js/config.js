@@ -14,7 +14,7 @@ window.WL_CONFIG = {
   // Moving to a new web address? Put the new address here (with https://) on the OLD site.
   // Players who open the old address get their progress backed up and are sent to the new
   // address with it, so nobody starts again. Leave "" until you move (see README).
-  movedTo: "",
+  movedTo: "https://liarhunt.com",
 
   // The date of Daily #1 (YYYY-MM-DD). Every day after this gets the next number.
   // If you change it, change the same date in firebase/firestore.rules too.
