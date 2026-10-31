@@ -1,6 +1,6 @@
 # Who's Lying?
 
-**Play it: https://r4flutter.github.io/WhoLies/**
+**Play it: https://liarhunt.com**
 
 A detective game for the browser. In every case the police checked a few facts and three suspects tell their story. One story can't be true. Tap the liar.
 
@@ -103,7 +103,7 @@ To start over, clear the site's data in your browser (the save is in `localStora
 
 ## 2. Web hosting (GitHub Pages)
 
-The game is live at **https://r4flutter.github.io/WhoLies/**. Every push to `main` updates it within a minute or two.
+The game is live at **https://liarhunt.com**. Every push to `main` updates it within a minute or two.
 
 ```
 git add -A
@@ -269,7 +269,7 @@ Launch with `provider: "none"`. Later:
 4. Edit `ads.txt` with your publisher ID (needs your own domain).
 5. In `js/config.js`: `provider: "adsense"`, `adsenseClient: "ca-pub-…"`, `adsenseTestMode: true` until approved.
 
-Ads use the same placements as on CrazyGames (section 3).
+Ads use the same placements as on CrazyGames (section 3), plus **side ads**: on screens at least 1100 px wide and 660 px tall, a tall ad sits left and right of the game (160×600 on laptops, 300×600 from 1600 px wide). Make a **Display ad** unit in AdSense and paste its number in `railSlot` (or leave it empty to reuse `displaySlot`). Phones and small windows get no side ads. Preview them with `?ads=demo`.
 
 ---
 

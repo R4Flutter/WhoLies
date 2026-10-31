@@ -9,7 +9,7 @@ window.WL_CONFIG = {
   // Your real web address, with https:// and no slash at the end.
   // It goes into every shared result, so friends get a link they can tap.
   // Change this if you move the game to your own .com.
-  siteUrl: "https://r4flutter.github.io/WhoLies",
+  siteUrl: "https://liarhunt.com",
 
   // Moving to a new web address? Put the new address here (with https://) on the OLD site.
   // Players who open the old address get their progress backed up and are sent to the new
@@ -67,6 +67,10 @@ window.WL_CONFIG = {
 
     // Optional: an AdSense display ad unit ID (just the number) for a banner
     // under the results screen and on the past-cases page. Leave "" for none.
-    displaySlot: ""
+    displaySlot: "",
+
+    // Optional: an AdSense display ad unit ID for the tall ads left and right of the game
+    // (wide screens only). Leave "" to use displaySlot for them too.
+    railSlot: ""
   }
 };

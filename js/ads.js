@@ -105,12 +105,25 @@
     });
   }
 
+  /* ---------- side ads: one tall ad left and right of the game on wide screens ---------- */
+  // ponytail: sized once at start-up; a window made wider later gets side ads after a reload.
+  function fillRails() {
+    var rails = document.querySelectorAll(".ad-rail");
+    var on = provider === "demo" || (provider === "adsense" && (cfg.railSlot || cfg.displaySlot));
+    if (!rails.length || !on || !matchMedia("(min-width: 1100px) and (min-height: 660px)").matches) return;
+    var w = innerWidth >= 1600 ? 300 : 160; // 300x600 on big screens, 160x600 on laptops
+    document.documentElement.style.setProperty("--rail", w + "px");
+    document.documentElement.classList.add("rails");
+    for (var i = 0; i < rails.length; i++) window.WLAds.display(rails[i], [w, 600]);
+  }
+
   window.WLAds = {
     provider: provider,
     hasAds: function () { return provider !== "none"; },
     init: function (h) {
       if (h) { hooks.onPause = h.onPause || hooks.onPause; hooks.onResume = h.onResume || hooks.onResume; }
       if (provider === "adsense") loadAdsense();
+      fillRails();
     },
     setSound: function (on) {
       soundOn = !!on;
@@ -126,15 +139,20 @@
       if (provider === "demo") return demoBreak(name, true);
       return Promise.resolve(true); // no ads: rewards are free
     },
-    display: function (el) {
+    // size: [width, height] for a fixed-size ad (the side ads); leave it out for a responsive banner.
+    display: function (el, size) {
       if (!el) return;
-      if (provider === "adsense" && cfg.displaySlot) {
-        el.innerHTML = '<ins class="adsbygoogle" style="display:block" data-ad-client="' + cfg.adsenseClient +
-          '" data-ad-slot="' + cfg.displaySlot + '" data-ad-format="auto" data-full-width-responsive="true"></ins>';
+      var slot = size ? cfg.railSlot || cfg.displaySlot : cfg.displaySlot;
+      var box = size ? "display:inline-block;width:" + size[0] + "px;height:" + size[1] + "px" : "display:block";
+      if (provider === "adsense" && slot) {
+        el.innerHTML = '<ins class="adsbygoogle" style="' + box + '" data-ad-client="' + cfg.adsenseClient +
+          '" data-ad-slot="' + slot + '"' + (size ? "" : ' data-ad-format="auto" data-full-width-responsive="true"') + "></ins>";
         try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { /* ignore */ }
         el.hidden = false;
       } else if (provider === "demo") {
-        el.innerHTML = '<div class="ad-demo-banner">Banner ad space (placeholder)</div>';
+        el.innerHTML = size
+          ? '<div class="ad-demo-rail" style="height:' + size[1] + 'px">Ad space<br>' + size[0] + " × " + size[1] + "</div>"
+          : '<div class="ad-demo-banner">Banner ad space (placeholder)</div>';
         el.hidden = false;
       } else {
         el.hidden = true;
