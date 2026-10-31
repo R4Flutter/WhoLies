@@ -328,6 +328,12 @@
     <!-- WEB-ONLY:START -->
     <button class="btn ghost wide web-only" type="button" id="btn-reminder">Daily reminder</button>
     <button class="btn ghost wide web-only" type="button" id="btn-install" hidden>Install the app</button>
+    <div class="cloud-box web-only" id="cloud-box" hidden>
+      <p class="cloud-h">☁️ Progress backup</p>
+      <p class="small" id="cloud-text"></p>
+      <div class="row2" id="cloud-acts"><button class="btn small ghost" type="button" id="btn-save-send">Send to myself</button><button class="btn small ghost" type="button" id="btn-save-copy">Copy code</button></div>
+      <button class="link-btn" type="button" id="btn-restore">Played on another device? Restore progress</button>
+    </div>
     <!-- WEB-ONLY:END -->
     <div class="danger-zone">
       <button class="link-btn" type="button" id="btn-reset">Reset all progress</button>
@@ -466,6 +472,18 @@
     <label class="field-label" for="group-code">Or join with a code</label>
     <div class="field-row"><input class="field code" id="group-code" type="text" maxlength="7" placeholder="ABC234" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn ghost" id="group-join" type="button">Join</button></div>
     <p class="field-error" id="group-error" role="alert" hidden></p>
+  </form>
+</dialog>
+
+<dialog id="dlg-restore" aria-labelledby="restore-h">
+  <form class="dlg" id="restore-form" novalidate>
+    <button class="icon-btn dlg-close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <h2 id="restore-h">Restore your progress</h2>
+    <p>Played on another phone or browser? Enter the save code from there. You'll find it in Settings, under Progress backup.</p>
+    <label class="field-label" for="restore-code">Save code</label>
+    <input class="field code" id="restore-code" type="text" maxlength="16" placeholder="ABCD-EFGH-JKMN" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <p class="field-error" id="restore-error" role="alert" hidden></p>
+    <button class="btn primary wide" type="submit" id="restore-go">Restore</button>
   </form>
 </dialog>
 

@@ -41,8 +41,10 @@
   var paused = { ad: false, hidden: false };
   var queue = [];          // celebrations to show after a verdict (level-ups etc.)
   var notices = [];        // messages to show at HQ, one at a time (comeback gift, shield saves...)
+  var cloud = { timer: 0, last: 0, busy: false, behind: false, gone: false }; // online backup (web)
+  var bootSearch = location.search;
 
-  function persist() { Plat.save(S); }
+  function persist() { if (cloud.gone) return; Plat.save(S); cloudDirty(); }
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function scoreOf(results) { return results.filter(function (r) { return r !== "r"; }).length; }
   function cells(results, total) {
@@ -241,6 +243,7 @@
     $("hud-title").hidden = onHQ;
     if (name !== "case") { Plat.gameplayStop(); hideCoach(); }
     if (onHQ) { gameTrace.stop(); hqTrace.start(); } else if (name === "case") { hqTrace.stop(); gameTrace.start(); } else { hqTrace.stop(); gameTrace.stop(); }
+    if (name === "hq" || name === "results") setTimeout(cloudFlush, 0);
     var el = $("scr-" + name);
     el.scrollTop = 0;
     if (name !== "case") $("verdict").hidden = true;
@@ -366,7 +369,10 @@
   // One banner at a time: install the app, then the daily reminder.
   function renderBanner() {
     var b = $("hq-banner"), html = "";
-    if (web() && S.tot.dailyDone >= 1 && !S.pwa.noInstall && canInstall()) {
+    if (cloudOn() && S.tot.solved <= 2 && !S.stats.played && !S.pwa.noRestore) {
+      html = '<span class="hb-ico" aria-hidden="true">☁️</span><span class="hb-txt"><b>Played before?</b><span>Bring back your progress with your save code.</span></span>' +
+        '<button class="btn small primary" type="button" data-banner="restore">Restore</button><button class="icon-btn" type="button" data-banner="x-restore" aria-label="Not now"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+    } else if (web() && S.tot.dailyDone >= 1 && !S.pwa.noInstall && canInstall()) {
       html = '<span class="hb-ico" aria-hidden="true">📲</span><span class="hb-txt"><b>Play from your home screen</b><span>One tap to open, works offline.</span></span>' +
         '<button class="btn small primary" type="button" data-banner="install">Install</button><button class="icon-btn" type="button" data-banner="x-install" aria-label="Not now"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
     } else if (web() && S.tot.dailyDone >= 2 && !S.pwa.reminder && !S.pwa.noReminder) {
@@ -428,12 +434,14 @@
     if (run && run.kind === "rush" && !run.over) { run.over = true; P.rushEnd(run.score); persist(); }
     run = null;
     try {
-      var q = location.search.replace(/([?&])(c|g|day)=[^&]*&?/g, "$1").replace(/[?&]$/, "");
+      var q = location.search.replace(/([?&])(c|g|day|restore)=[^&]*&?/g, "$1").replace(/[?&]$/, "");
       if (location.hash || q !== location.search) history.replaceState(null, "", location.pathname + q);
     } catch (e) { /* ignore */ }
     applyTheme();
     renderHQ();
     show("hq");
+    if (cloud.behind) { cloud.behind = false; cloudPull(S.sync.code, "sync"); }
+    if (cloudOn() && S.sync.code && !S.sync.told && (S.stats.played >= 2 || S.tot.solved >= 12)) { S.sync.told = true; persist(); notice(saveTip()); }
     setTimeout(pumpNotices, 350);
   }
 
@@ -568,6 +576,7 @@
       if (run && run.prog) { run.prog.elapsed = run.elapsed; persist(); }
       traces.forEach(function (t) { if (t.active) { t.stop(); t.wasActive = true; } });
       Plat.flush();
+      cloudFlush();
     } else {
       clock.last = performance.now();
       traces.forEach(function (t) { if (t.wasActive) { t.wasActive = false; t.start(); } });
@@ -1291,20 +1300,20 @@
     $("btn-share").textContent = Plat.allowExternal() ? "Share your result" : "Copy your result";
   }
   function share() { WL.track("share", { method: "button" }); shareOut(shareTextNow); }
-  function shareOut(text) {
+  function shareOut(text, copiedMsg) {
     if (web() && coarse && navigator.share) {
-      navigator.share({ text: text }).catch(function (e) { if (!e || e.name !== "AbortError") copyText(text); });
+      navigator.share({ text: text }).catch(function (e) { if (!e || e.name !== "AbortError") copyText(text, copiedMsg); });
       return;
     }
-    copyText(text);
+    copyText(text, copiedMsg);
   }
   function copy() { copyText(shareTextNow); }
-  function copyText(text) {
-    var ok = function () { toast("Copied. Paste it to a friend."); };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, function () { fallbackCopy(text); });
-    else fallbackCopy(text);
+  function copyText(text, msg) {
+    var ok = function () { toast(msg || "Copied. Paste it to a friend."); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, function () { fallbackCopy(text, msg); });
+    else fallbackCopy(text, msg);
   }
-  function fallbackCopy(text) {
+  function fallbackCopy(text, msg) {
     var ta = document.createElement("textarea");
     ta.value = text; ta.setAttribute("readonly", "");
     ta.style.position = "fixed"; ta.style.top = "0"; ta.style.left = "-9999px";
@@ -1312,7 +1321,7 @@
     var ok = false;
     try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
     ta.remove();
-    if (ok) { toast("Copied. Paste it to a friend."); return; }
+    if (ok) { toast(msg || "Copied. Paste it to a friend."); return; }
     var box = $("share-text");
     box.value = text; box.hidden = false; box.focus(); box.select();
     toast("Select the text in the box and copy it.");
@@ -1436,6 +1445,12 @@
     $("set-music").disabled = forced; $("set-sound").disabled = forced;
     $("mute-note").hidden = !forced;
     $("reset-confirm").hidden = true;
+    if ($("cloud-box")) {
+      $("cloud-box").hidden = !cloudOn();
+      $("cloud-text").innerHTML = S.sync.code ? 'Your progress is saved online. Your save code: <b class="save-code">' + fmtCode(S.sync.code) + "</b>"
+        : "Your progress will be saved online after your first case.";
+      $("cloud-acts").hidden = !S.sync.code;
+    }
   }
   $("btn-settings").addEventListener("click", function () { Snd.play("click"); syncSettings(); openDialog("dlg-settings"); });
   $("set-music").addEventListener("change", function () { S.settings.music = this.checked; Snd.setMusic(this.checked); persist(); });
@@ -1445,8 +1460,9 @@
   $("btn-reset").addEventListener("click", function () { $("reset-confirm").hidden = false; });
   $("btn-reset-no").addEventListener("click", function () { $("reset-confirm").hidden = true; });
   $("btn-reset-yes").addEventListener("click", function () {
-    S = {}; Plat.save(S, true);
+    cloud.gone = true;
     try { window.localStorage.removeItem("whoslying:v1"); } catch (e) { /* ignore */ }
+    S = { noAutoRestore: true }; Plat.save(S, true);
     location.reload();
   });
 
@@ -2124,20 +2140,21 @@
     d.setDate(d.getDate() + 1); d.setHours(+t[0] || 0, +t[1] || 0, 0, 0);
     return d;
   }
+  function remUrl() { return cloudOn() && S.sync.code ? restoreLink() : Plat.shareLink({}); }
   function openReminder() {
     if (!$("dlg-reminder")) return;
     updateRemLink();
     openDialog("dlg-reminder");
   }
   function updateRemLink() {
-    var d = remStart(), end = new Date(d.getTime() + 5 * 60000), url = Plat.shareLink({}), tz = "";
+    var d = remStart(), end = new Date(d.getTime() + 5 * 60000), url = remUrl(), tz = "";
     try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { /* ignore */ }
     $("rem-google").href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent("🕵️ New Who's Lying? cases") +
       "&details=" + encodeURIComponent("5 new cases are waiting. Keep your streak alive: " + url) +
       "&dates=" + calDate(d) + "/" + calDate(end) + "&recur=" + encodeURIComponent("RRULE:FREQ=DAILY") + (tz ? "&ctz=" + encodeURIComponent(tz) : "");
   }
   function downloadIcs() {
-    var d = remStart(), url = Plat.shareLink({}), now = new Date();
+    var d = remStart(), url = remUrl(), now = new Date();
     var ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Who's Lying//Daily reminder//EN", "CALSCALE:GREGORIAN", "BEGIN:VEVENT",
       "UID:whoslying-" + now.getTime() + "@whoslying", "DTSTAMP:" + now.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, ""),
       "DTSTART:" + calDate(d), "DURATION:PT5M", "RRULE:FREQ=DAILY", "SUMMARY:🕵️ New Who's Lying? cases",
@@ -2176,7 +2193,13 @@
       installEvt.userChoice.then(function (c) { WL.track("install_prompt", { outcome: c && c.outcome }); installEvt = null; if (screen === "hq") renderBanner(); });
       return;
     }
-    if (isIOS()) showNotice({ icon: "📲", title: "Add it to your Home Screen", text: "In Safari, tap the <b>Share</b> button at the bottom of the screen, then <b>Add to Home Screen</b>.", yes: "Got it" });
+    if (isIOS()) {
+      var code = cloudOn() && S.sync.code;
+      showNotice({ icon: "📲", title: "Add it to your Home Screen",
+        text: "In Safari, tap the <b>Share</b> button at the bottom of the screen, then <b>Add to Home Screen</b>." +
+          (code ? "<br><br>On iPhone the app starts empty, so copy your save code now, then tap <b>Restore</b> in the app: <b>" + fmtCode(S.sync.code) + "</b>" : ""),
+        yes: code ? "Copy my save code" : "Got it", onYes: function () { if (code) copyText(fmtCode(S.sync.code), "Save code copied. Paste it into Restore in the app."); } });
+    }
   }
   if ($("btn-install") && isIOS() && !standalone()) $("btn-install").hidden = false;
   if (web()) {
@@ -2193,9 +2216,132 @@
     var k = b.dataset.banner;
     if (k === "install") install();
     else if (k === "reminder") openReminder();
+    else if (k === "restore") openRestore();
+    else if (k === "x-restore") { S.pwa.noRestore = true; persist(); renderBanner(); }
     else if (k === "x-install") { S.pwa.noInstall = true; persist(); renderBanner(); }
     else if (k === "x-reminder") { S.pwa.noReminder = true; persist(); renderBanner(); }
   });
+
+  /* ---------- cloud save (web) ----------
+     Progress is backed up online under a private 12-letter save code. The code (or a restore
+     link) brings it to a new phone, browser, iPhone home-screen app or web address. A device
+     with the same code takes the newest progress when it starts. XP can't go down in the cloud,
+     so the copy with the most progress always wins. CrazyGames saves through its own SDK. */
+  function cloudOn() { return lbOn() && LB.provider === "firebase"; }
+  function fmtCode(c) { return c ? c.slice(0, 4) + "-" + c.slice(4, 8) + "-" + c.slice(8) : ""; }
+  function restoreLink() { return Plat.shareLink({ restore: S.sync.code }); }
+  function cloudDirty() {
+    if (!S || !S.sync) return;
+    S.sync.dirty = true;
+    if (!cloudOn() || S.tot.solved < 1 || cloud.timer) return;
+    // ponytail: at most one background backup every 2 minutes; HQ, results and leaving the app back up at once
+    cloud.timer = setTimeout(function () { cloud.timer = 0; cloudPush(); }, Math.max(5000, 120000 - (Date.now() - cloud.last)));
+  }
+  function cloudFlush() {
+    if (!S || !S.sync || !S.sync.dirty) return;
+    clearTimeout(cloud.timer); cloud.timer = 0;
+    cloudPush();
+  }
+  function cloudPush() {
+    if (!cloudOn() || !S.sync.dirty || cloud.busy || cloud.gone || S.tot.solved < 1) return Promise.resolve(false);
+    if (!S.sync.code) S.sync.code = LB.newSaveCode();
+    cloud.busy = true;
+    S.sync.dirty = false; S.sync.stamp = Date.now();
+    return LB.pushSave(S.sync.code, JSON.stringify(S), S.xp || 0, S.sync.stamp).then(function () {
+      cloud.last = Date.now(); Plat.save(S); return true;
+    }, function (e) {
+      S.sync.dirty = true;
+      if (e && e.code === "permission-denied") cloud.behind = true; // another device has more progress
+      return false;
+    }).then(function (ok) {
+      cloud.busy = false;
+      if (cloud.behind && screen === "hq" && !run) { cloud.behind = false; cloudPull(S.sync.code, "sync"); }
+      return ok;
+    });
+  }
+  function summaryOf(x) {
+    var li = P.levelInfo(x.xp || 0), st = x.stats || {}, streak = st.lastDay >= TODAY - 1 ? st.streak || 0 : 0;
+    return "Level " + li.level + (streak ? " · " + streak + "-day streak" : "") + " · " + FX.fmt(x.coins || 0) + " coins";
+  }
+  // mode "sync": our own code; take the cloud copy if another device got further.
+  // mode "restore": a typed code or a restore link; ask first unless this device is new.
+  function cloudPull(code, mode) {
+    return LB.pullSave(code).then(function (doc) {
+      if (!doc) { if (mode === "restore") restoreFailed("We couldn't find saved progress for that code. Check it and try again."); return; }
+      var data;
+      try { data = JSON.parse(doc.data); } catch (e) { return; }
+      if (mode === "sync") {
+        if (doc.xp > (S.xp || 0) || (doc.xp === (S.xp || 0) && doc.stamp > (S.sync.stamp || 0) + 1000)) useSave(data, code, "Your progress from your other device is here.");
+        return;
+      }
+      closeDialog("dlg-restore");
+      if (S.tot.solved <= 2 && !S.stats.played && !S.noAutoRestore) { useSave(data, code, "Progress restored. Welcome back, detective!"); return; }
+      showNotice({ icon: "☁️", title: "Restore your saved progress?",
+        text: "<b>Saved progress:</b> " + esc(summaryOf(data)) + "<br><b>This device:</b> " + esc(summaryOf(S)) + "<br>Restoring replaces what's on this device.",
+        yes: "Restore", no: "Keep this device", onYes: function () { useSave(data, code, "Progress restored."); } });
+    }).catch(function (e) { if (mode === "restore") restoreFailed(LB.friendlyError(e)); });
+  }
+  // Swap in a saved copy and restart the game with it.
+  function useSave(data, code, note) {
+    cloud.gone = true; clearTimeout(cloud.timer);
+    data.sync = Object.assign({}, data.sync || {}, { code: code, dirty: false, note: note });
+    Plat.save(data, true);
+    WL.track("progress_restored", {});
+    var q = bootSearch.replace(/([?&])restore=[^&]*&?/, "$1").replace(/[?&]$/, "");
+    location.replace(location.pathname + q + location.hash);
+  }
+  function openRestore() {
+    if (!$("dlg-restore")) return;
+    $("restore-code").value = ""; $("restore-error").hidden = true; $("restore-go").disabled = false;
+    openDialog("dlg-restore");
+  }
+  function restoreFailed(msg) {
+    if ($("dlg-restore") && $("dlg-restore").open) { $("restore-error").textContent = msg; $("restore-error").hidden = false; $("restore-go").disabled = false; }
+    else toast(esc(msg));
+  }
+  function sendSaveLink() {
+    WL.track("save_link_shared", {});
+    shareOut("My Who's Lying? save link. Open it on any phone or browser to continue my progress (keep it private):\n" + restoreLink() +
+      "\nSave code: " + fmtCode(S.sync.code), "Copied. Keep it somewhere safe, like a note or a message to yourself.");
+  }
+  function saveTip() {
+    return { icon: "☁️", eyebrow: "Your progress is safe", title: "Keep your save code",
+      text: "Your progress is backed up online. New phone, new browser or cleared data? This code brings everything back:",
+      html: '<p class="save-code big">' + fmtCode(S.sync.code) + "</p>", yes: "Send it to myself", no: "Later", onYes: sendSaveLink };
+  }
+  if ($("cloud-box")) {
+    $("btn-save-send").addEventListener("click", function () { Snd.play("click"); sendSaveLink(); });
+    $("btn-save-copy").addEventListener("click", function () { Snd.play("click"); copyText(fmtCode(S.sync.code), "Save code copied. Keep it somewhere safe."); });
+    $("btn-restore").addEventListener("click", function () { Snd.play("click"); closeDialog("dlg-settings"); openRestore(); });
+    $("restore-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var code = LB.cleanSaveCode($("restore-code").value);
+      if (!code) return restoreFailed("Save codes have 12 letters and numbers, like ABCD-EFGH-JKMN.");
+      if (code === S.sync.code) return restoreFailed("That's this device's own save code. Enter the code from your other device.");
+      $("restore-go").disabled = true;
+      cloudPull(code, "restore");
+    });
+  }
+  // Moving to a new web address (config movedTo): back up this browser's progress first,
+  // then open the new address with the restore code, so nobody starts again from zero.
+  function moveAway() {
+    var to = CFG.movedTo;
+    if (!to || !web()) return false;
+    try { if (new URL(to, location.href).origin === location.origin) return false; } catch (e) { return false; }
+    var note = document.createElement("p");
+    note.className = "boot-note"; note.textContent = "We've moved! Bringing your progress along...";
+    $("boot").appendChild(note);
+    var go = function () {
+      var q = bootSearch.replace(/^\?/, "").split("&").filter(function (x) { return x && !/^restore=/.test(x); });
+      if (S.sync.code && S.tot.solved > 0) q.unshift("restore=" + S.sync.code);
+      location.replace(to.replace(/\/$/, "") + "/" + (q.length ? "?" + q.join("&") : "") + location.hash);
+    };
+    if (!cloudOn() || S.tot.solved < 1) { go(); return true; }
+    S.sync.dirty = true;
+    var tries = 0;
+    (function attempt() { cloudPush().then(function (ok) { if (ok || ++tries >= 3) go(); else setTimeout(attempt, 1500); }); })();
+    return true;
+  }
 
   /* ---------- start-up checks: streak shields and comeback gift ---------- */
   function startupChecks() {
@@ -2304,6 +2450,7 @@
     S.league = Object.assign({ week: 0, tier: 0, entered: false }, S.league || {});
     S.groups = S.groups || [];
     S.pwa = S.pwa || {};
+    S.sync = Object.assign({ code: "", dirty: false, stamp: 0 }, S.sync || {});
     if (S.challenge && S.challenge.day < TODAY - 7) S.challenge = null;
     P.init(S, hooks);
     // Old saves (before career mode) skip the tutorial.
@@ -2313,6 +2460,8 @@
     shownCoins = S.coins;
   }
   function route() {
+    var rc = cloudOn() ? LB.cleanSaveCode(Plat.inviteParam("restore")) : "";
+    if (rc && rc !== S.sync.code) { goHQ(); toast("Looking for your saved progress..."); cloudPull(rc, "restore"); return; }
     var ch = parseChallenge(Plat.inviteParam("c"));
     if (ch) { handleChallenge(ch); goHQ(); return; }
     var grp = lbOn() ? LB.cleanCode(Plat.inviteParam("g")) : "";
@@ -2344,10 +2493,14 @@
       if (Plat.isCrazy()) Plat.hasAdblock().then(function (b) { adblocked = b; });
       return Promise.all([Plat.getUser().then(function (u) { user = u; }), fontsReady]);
     }).then(function () {
+      if (moveAway()) return;
       Plat.loadingStop();
       document.body.classList.remove("booting");
       startupChecks();
       route();
+      if (S.sync.note) { var note = S.sync.note; delete S.sync.note; setTimeout(function () { toast(esc(note), "gold", 3800); }, 700); }
+      // Another device with the same save code may be further ahead: take its progress first, then back up.
+      if (cloudOn() && S.sync.code) { cloud.busy = true; cloudPull(S.sync.code, "sync").then(function () { cloud.busy = false; cloudFlush(); }); }
       if (lbOn()) {
         setTimeout(checkRewards, 1500);
         if (S.settings.playerName) resolveLeague().then(function () { return refreshLeague(true); }).catch(function () { /* offline */ });
@@ -2361,7 +2514,8 @@
   // Test hook for automated checks (only with ?test=1 in the address).
   if (/[?&]test=1/.test(location.search)) window.__WLtest = {
     run: function () { return run; }, state: function () { return S; }, persist: persist,
-    hq: goHQ, career: startCareer, rush: startRush, daily: startDaily, night: startNight, week: openWeek, files: openFiles
+    hq: goHQ, career: startCareer, rush: startRush, daily: startDaily, night: startNight, week: openWeek, files: openFiles,
+    cloud: function () { return cloud; }, push: function () { S.sync.dirty = true; return cloudPush(); }
   };
   boot();
 })();

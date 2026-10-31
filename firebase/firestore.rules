@@ -100,6 +100,23 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Cloud saves: each player's progress, backed up under a private 12-letter save code.
+    // Knowing the code is what lets you read or update it (codes can't be listed). XP can
+    // never go down, so an older copy on another device can't overwrite newer progress.
+    match /saves/{code} {
+      allow get: if code.matches('^[A-Z2-9]{12}$');
+      allow list, delete: if false;
+      allow create, update: if signedIn()
+        && code.matches('^[A-Z2-9]{12}$')
+        && request.resource.data.keys().hasOnly(['data', 'xp', 'stamp', 'updatedAt'])
+        && request.resource.data.data is string
+        && request.resource.data.data.size() <= 300000
+        && request.resource.data.xp is int && request.resource.data.xp >= 0
+        && request.resource.data.stamp is int
+        && request.resource.data.updatedAt == request.time
+        && (resource == null || request.resource.data.xp >= resource.data.xp);
+    }
+
     // Endless mode: each player keeps their best run. It can only go up.
     match /endless/{userId} {
       allow read: if true;

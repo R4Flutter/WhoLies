@@ -1,7 +1,7 @@
 /* WHO'S LYING? — service worker: lets the game install as an app and play offline.
    Pages, scripts and styles: network first, so a new version shows up straight away.
    Fonts, sounds and images: cache first, they never change. Other sites are left alone. */
-var CACHE = "wl-v2";
+var CACHE = "wl-v3";
 var CORE = [
   "./", "index.html", "css/style.css", "manifest.webmanifest",
   "js/config.js", "js/cases.js", "js/engine.js", "js/ads.js", "js/leaderboard.js",
@@ -31,7 +31,8 @@ self.addEventListener("fetch", function (e) {
         return hit || fetch(req).then(function (r) { if (r.ok) c.put(key, r.clone()); return r; });
       });
     }
-    return fetch(req).then(function (r) { if (r.ok) c.put(key, r.clone()); return r; }).catch(function () {
+    // "no-cache" asks the server whether the file changed, so a new release never mixes with old files.
+    return fetch(req, req.mode === "navigate" ? undefined : { cache: "no-cache" }).then(function (r) { if (r.ok) c.put(key, r.clone()); return r; }).catch(function () {
       return c.match(key).then(function (hit) { return hit || (req.mode === "navigate" ? c.match(url.origin + url.pathname.replace(/[^/]*$/, "")) : undefined); });
     });
   }));

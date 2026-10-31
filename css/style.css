@@ -875,6 +875,13 @@ dialog[open] { animation: dlgin 0.24s cubic-bezier(0.2, 1.25, 0.4, 1) both; }
 .accusing .wk-sus { border-color: var(--needle); }
 .accusing .wk-sus:hover { transform: translateY(-2px); box-shadow: 0 3px 0 var(--needle); }
 
+/* ---------- progress backup ---------- */
+.cloud-box { border: 2px dashed var(--grid-strong); border-radius: var(--r); padding: 0.7rem 0.8rem; display: grid; gap: 0.5rem; }
+.cloud-h { font-family: var(--display); font-weight: 900; font-size: 1.2rem; }
+.save-code { font-family: var(--display); font-weight: 900; letter-spacing: 0.08em; white-space: nowrap; }
+.save-code.big { font-size: 1.9rem; background: var(--paper); border: 2px dashed var(--ink); border-radius: 10px; padding: 0.35rem 0.8rem; -webkit-user-select: all; user-select: all; }
+.boot-note { color: var(--pencil); font-weight: 700; text-align: center; padding: 0 16px; }
+
 /* ---------- notices, groups, board extras ---------- */
 .notice-icon { font-size: 3.4rem; line-height: 1; font-family: var(--display); font-weight: 900; color: var(--gold); animation: badgein 0.55s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
 .notice-icon:empty { display: none; }

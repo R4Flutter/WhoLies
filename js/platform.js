@@ -168,6 +168,7 @@
     var u = CFG.siteUrl || "";
     if (!u || /example/.test(u)) u = location.origin && location.origin !== "null" ? location.origin + location.pathname.replace(/[^/]*$/, "") : "";
     u = u.replace(/\/$/, "") + "/";
+    if (params && params.restore) return u + "?restore=" + encodeURIComponent(params.restore);
     if (params && params.c) return u + "?c=" + encodeURIComponent(params.c);
     if (params && params.g) return u + "?g=" + encodeURIComponent(params.g);
     if (params && params.day) return u + "#day-" + params.day;

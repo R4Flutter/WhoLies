@@ -177,6 +177,15 @@
   }
   function err(code, msg) { var e = new Error(msg); e.code = code; return e; }
 
+  /* ---------- cloud saves: a private 12-letter save code is the key ---------- */
+  function newSaveCode() {
+    var a = new Uint32Array(12), c = "";
+    window.crypto.getRandomValues(a);
+    for (var i = 0; i < 12; i++) c += CODE_CHARS[a[i] % CODE_CHARS.length];
+    return c;
+  }
+  function cleanSaveCode(raw) { var c = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); return /^[A-Z2-9]{12}$/.test(c) ? c : ""; }
+
   /* ---------- public API ---------- */
   window.WLLB = {
     provider: provider,
@@ -325,6 +334,21 @@
         snaps.forEach(function (s) { s.docs.forEach(function (d) { out[d.data().uid] = d.data(); }); });
         return out;
       });
+    },
+
+    newSaveCode: newSaveCode,
+    cleanSaveCode: cleanSaveCode,
+    // Back up the whole save. The rules refuse it if the cloud copy has more XP (another device is ahead).
+    pushSave: function (code, json, xp, stamp) {
+      if (provider !== "firebase") return demoOff();
+      return ready().then(function () {
+        return db.collection("saves").doc(code).set({ data: json, xp: xp, stamp: stamp, updatedAt: window.firebase.firestore.FieldValue.serverTimestamp() });
+      });
+    },
+    pullSave: function (code) {
+      if (provider !== "firebase") return demoOff();
+      return ready().then(function () { return db.collection("saves").doc(code).get(); })
+        .then(function (s) { return s.exists ? s.data() : null; });
     },
 
     /* For each finished day the player posted a score on, find their final rank. */

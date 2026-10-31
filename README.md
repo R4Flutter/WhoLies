@@ -26,6 +26,7 @@ It is plain HTML, CSS and JavaScript with no build step. The web version is host
 
 | Hook | What it does |
 |---|---|
+| Progress backup (web) | Every player's progress is backed up online automatically under a private save code (like `ABCD-EFGH-JKMN`). The code, or a "send to myself" link, brings it back on a new phone, a new browser, an iPhone home-screen app or a new web address. Two devices with the same code stay in sync. |
 | Streak Shields | Save your Daily streak if you miss a day (used automatically, hold up to 2). Earn one every 7 days in a row or buy one for 200 coins. |
 | Case Keys + Case Files | Case Files lists every past Daily. A Case Key opens a missed day with full rewards and its weekly clue. Earn one every 7 days in a row, on day 7 of the login calendar, or buy them. |
 | Comeback gift | Players who return after 3+ days get 150 coins, 2 Magnifiers and a Case Key. |
@@ -91,6 +92,7 @@ Test addresses:
 - `#endless` jumps straight into Rush.
 - `?c=6.ggyrg.92.Raj` opens a friend challenge (Daily #6, 4 of 5, 92 seconds, from Raj).
 - `?g=ABC234` opens a friend group invite.
+- `?restore=ABCDEFGHJKMN` restores progress from a save code (what the "Send to myself" link does).
 - `?test=1` adds `window.__WLtest` for automated checks (start any mode, read the saved state).
 
 Testing on `localhost` uses the real database, so delete test scores afterwards (Firestore console, or `firebase firestore:delete scores/<id>`).
@@ -109,17 +111,27 @@ git commit -m "Describe your change"
 git push
 ```
 
-### Move to your own domain
+### Move to your own domain (players keep their progress)
 
-**Do this before you promote the game.** Each player's save (level, coins, streak, leaderboard name) lives in their browser and belongs to one web address. When the address changes, every player starts from zero.
+A player's progress lives in their browser, and browsers keep it separately for each web address. So when the game moves, the **old address forwards every player to the new one and brings their progress along** (using the online backup). For that, the old address has to stay online: the new domain goes in a **new repository**, and this repository stays behind as the old address. Example domain: `whoslying.com`.
 
-1. At your domain seller, add these DNS records (example: `whoslying.com`):
+1. At your domain seller, add these DNS records:
    - 4 × `A` records for `@`: `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
    - 1 × `CNAME` record for `www`: `r4flutter.github.io`
-2. Make a file named `CNAME` (no extension) in the top folder of this repo with one line: `whoslying.com`. It has to be in `main`: the publish workflow copies `main` over `gh-pages` on every push, so a domain set only in GitHub's settings page is wiped by the next push.
-3. Replace `https://r4flutter.github.io/WhoLies` with `https://whoslying.com` in `js/config.js` (`siteUrl`), `index.html`, `archive.html`, `privacy.html`, `robots.txt` and `sitemap.xml`.
-4. Push. Then in the repo go to **Settings → Pages**, check the custom domain shows `whoslying.com`, and tick **Enforce HTTPS** once it's allowed (can take up to an hour).
-5. Firebase console → **Authentication → Settings → Authorized domains → Add domain** → `whoslying.com`.
+2. On GitHub, create a new empty repository, for example `whoslying-site`.
+3. In this folder, keep the current repository as `old` and add the new one:
+   ```
+   git remote rename origin old
+   git remote add origin https://github.com/R4Flutter/whoslying-site.git
+   ```
+4. In `js/config.js` set `siteUrl: "https://whoslying.com"` and `movedTo: "https://whoslying.com"` (`movedTo` does nothing on the new address itself). Replace `https://r4flutter.github.io/WhoLies` with `https://whoslying.com` in `index.html`, `archive.html`, `privacy.html`, `robots.txt` and `sitemap.xml`. Commit, then push to both:
+   ```
+   git push old main
+   git push origin main
+   ```
+5. Make a file named `CNAME` (no extension) with one line: `whoslying.com`. Commit it and push **only to the new repository** (`git push origin main`). It has to be in `main` there, because the publish workflow copies `main` over `gh-pages` on every push. Never push it to `old`: then GitHub would send the old address straight to the new one without running the game, and players would lose their progress.
+6. In the new repository: **Settings → Pages → Build and deployment → Deploy from a branch → `gh-pages`**. Check the custom domain shows `whoslying.com`, and tick **Enforce HTTPS** once it's allowed (can take up to an hour).
+7. From now on push only to `origin`. Leave the old repository as it is: it keeps forwarding players, with their progress, for as long as it exists.
 
 ---
 
@@ -198,6 +210,9 @@ It stores four collections:
 | `endless` | Each player's best Rush run (can only go up). |
 | `league` | One entry per player per week. The rules re-add the player's own Daily scores, so league points can't be faked. |
 | `groups` | Friend groups: name and members. Members can only add, rename or remove themselves. |
+| `saves` | Progress backups, one per save code. Saves can't be listed, only opened with their code, and their XP can never go down (so an old copy never overwrites newer progress). |
+
+**Free plan limits.** Each player costs about 1 read and a few writes per visit (the backup runs when they reach HQ or a results screen, leave the app, or every 2 minutes during long sessions). The free Spark plan gives 50,000 reads and 20,000 writes a day, which is enough for a few thousand players a day. Past that, switch the project to the Blaze plan (pay as you go, a few dollars at that size).
 
 Everything about the database is in this repo: `firebase.json` (location, anonymous sign-in), `firebase/firestore.rules` and `firebase/firestore.indexes.json`. After you change any of them, run:
 
